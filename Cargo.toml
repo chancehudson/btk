@@ -1,0 +1,13 @@
+[package]
+name = "btk"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.99"
+eframe = "0.32.0"
+egui = "0.32.0"
+egui_extras = { version = "0.32.2", features = ["image"] }
+env_logger = "0.11.8"
+image = { version = "0.25.8", features = ["jpeg"] }
+log = "0.4.28"
