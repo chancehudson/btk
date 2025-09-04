@@ -1,0 +1,103 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <title>BTK</title>
+        <style>
+            body {
+                margin: 0;
+                padding: 0px;
+                font-family: Arial, sans-serif;
+                background-color: #1a1a1a;
+                color: white;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                min-height: 100vh;
+            }
+
+            #loading {
+                text-align: center;
+                margin: 50px 0;
+            }
+
+            .spinner {
+                border: 4px solid #333;
+                border-top: 4px solid #0000ee;
+                border-radius: 50%;
+                width: 40px;
+                height: 40px;
+                animation: spin 1s linear infinite;
+                margin: 20px auto;
+            }
+
+            @keyframes spin {
+                0% {
+                    transform: rotate(0deg);
+                }
+                100% {
+                    transform: rotate(360deg);
+                }
+            }
+
+            #wasm-container {
+                width: 100%;
+                height: 100%;
+                border: 2px solid #333;
+                border-radius: 8px;
+                background-color: #000;
+                display: none;
+            }
+
+            #error {
+                color: #ff4444;
+                text-align: center;
+                display: none;
+                margin: 20px;
+                padding: 20px;
+                border: 1px solid #ff4444;
+                border-radius: 8px;
+                background-color: #2a1a1a;
+            }
+
+            canvas {
+                display: block;
+                margin: 0 auto;
+                width: 100vw !important;
+                height: 100vh !important;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="loading">
+            <div class="spinner"></div>
+            <p>Just a moment...</p>
+        </div>
+
+        <div id="error">
+            <h3>Failed to load WASM module</h3>
+            <p id="error-message"></p>
+            <p>
+                Make sure the following files are in the same directory as this
+                HTML file:
+            </p>
+            <ul>
+                <li>btk.wasm</li>
+                <li>btk.js</li>
+            </ul>
+        </div>
+
+        <canvas id="the_canvas_id"></canvas>
+
+        <script type="module">
+            addEventListener("TrunkApplicationStarted", (event) => {
+                console.log("application started");
+                // Hide loading
+                document.getElementById('loading').style.display = 'none';
+                
+                // Maybe call some WASM functions directly
+                // wasm.some_exported_function();
+            });
+        </script>
+    </body>
+</html>

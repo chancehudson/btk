@@ -8,7 +8,17 @@ anyhow = "1.0.99"
 eframe = "0.32.0"
 egui = "0.32.0"
 egui_extras = { version = "0.32.2", features = ["image"] }
-env_logger = "0.11.8"
 image = { version = "0.25.8", features = ["jpeg"] }
 indexmap = "2.11.0"
 log = "0.4.28"
+web-time = "1.1.0"
+
+# For web builds
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen-futures = "0.4"
+web-sys = "0.3.77"
+
+# Desktop-only dependencies
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+env_logger = "0.11"
+

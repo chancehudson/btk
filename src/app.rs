@@ -1,8 +1,7 @@
-use std::time::Duration;
-use std::time::Instant;
-
 use egui::Rect;
 use indexmap::IndexMap;
+use web_time::Duration;
+use web_time::Instant;
 
 use crate::applets::*;
 
