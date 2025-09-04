@@ -4,13 +4,16 @@ mod applets;
 // When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
+    use eframe::WindowBuilderHook;
+
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
 
     let native_options = eframe::NativeOptions {
+        run_and_return: false,
         viewport: egui::ViewportBuilder::default()
             .with_resizable(true)
             .with_inner_size([800.0, 1200.0])
-            .with_min_inner_size([300.0, 300.0]),
+            .with_min_inner_size([300.0, 400.0]),
         // .with_icon(
         //     // NOTE: Adding an icon is optional
         //     eframe::icon_data::from_png_bytes(&include_bytes!("../assets/icon-256.png")[..])

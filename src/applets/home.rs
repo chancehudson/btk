@@ -1,9 +1,14 @@
-use super::Renderable;
+use super::Applet;
 
+#[derive(Default)]
 pub struct HomeApplet {}
 
-impl Renderable for HomeApplet {
-    fn render(ctx: &egui::Context) {
+impl Applet for HomeApplet {
+    fn name(&self) -> &str {
+        "Home"
+    }
+
+    fn render(&self, ctx: &egui::Context) {
         egui::TopBottomPanel::bottom("footer")
             .exact_height(240.0)
             .show_separator_line(false)

@@ -1,16 +1,26 @@
 mod home;
+mod mail;
 mod notes;
+mod settings;
+mod tasks;
 
 pub use home::HomeApplet;
+pub use mail::MailApplet;
 pub use notes::NotesApplet;
+pub use settings::SettingsApplet;
+pub use tasks::TasksApplet;
 
 pub struct DefaultApplet;
-impl Renderable for DefaultApplet {}
+impl Applet for DefaultApplet {}
 
-pub trait Renderable {
-    fn init() {}
+pub trait Applet {
+    fn init(&self) {}
 
-    fn render(ctx: &egui::Context) {
+    fn name(&self) -> &str {
+        "unimplemented"
+    }
+
+    fn render(&self, ctx: &egui::Context) {
         egui::Window::new("debug").resizable(true).show(ctx, |ui| {
             ui.label("unimplemented");
             // Show window info

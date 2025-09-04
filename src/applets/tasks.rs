@@ -1,10 +1,10 @@
 use super::Applet;
 
 #[derive(Default)]
-pub struct NotesApplet {}
+pub struct TasksApplet {}
 
-impl Applet for NotesApplet {
+impl Applet for TasksApplet {
     fn name(&self) -> &str {
-        "Notes"
+        "Tasks"
     }
 }
