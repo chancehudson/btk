@@ -8,7 +8,7 @@ impl Applet for HomeApplet {
         "Home"
     }
 
-    fn render(&self, ctx: &egui::Context) {
+    fn render(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::bottom("footer")
             .exact_height(240.0)
             .show_separator_line(false)

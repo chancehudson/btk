@@ -19,14 +19,14 @@ impl App {
 
         let mut applets = IndexMap::new();
 
-        for applet in vec![
+        for mut applet in vec![
             Box::new(HomeApplet::default()) as Box<dyn Applet>,
             Box::new(NotesApplet::default()) as Box<dyn Applet>,
             Box::new(TasksApplet::default()) as Box<dyn Applet>,
             Box::new(MailApplet::default()) as Box<dyn Applet>,
             Box::new(SettingsApplet::default()) as Box<dyn Applet>,
         ] {
-            applet.init();
+            applet.as_mut().init();
             applets.insert(applet.name().into(), applet);
         }
 
@@ -83,7 +83,7 @@ impl eframe::App for App {
             });
         });
 
-        if let Some(applet) = self.applets.get(&self.active_applet) {
+        if let Some(applet) = self.applets.get_mut(&self.active_applet) {
             applet.render(ctx);
         } else {
             egui::Window::new("unknown applet")

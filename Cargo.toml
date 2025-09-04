@@ -7,6 +7,7 @@ edition = "2024"
 anyhow = "1.0.99"
 eframe = "0.32.0"
 egui = "0.32.0"
+egui_commonmark = "0.21.1"
 egui_extras = { version = "0.32.2", features = ["image"] }
 image = { version = "0.25.8", features = ["jpeg"] }
 indexmap = "2.11.0"

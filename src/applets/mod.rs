@@ -14,13 +14,13 @@ pub struct DefaultApplet;
 impl Applet for DefaultApplet {}
 
 pub trait Applet {
-    fn init(&self) {}
+    fn init(&mut self) {}
 
     fn name(&self) -> &str {
         "unimplemented"
     }
 
-    fn render(&self, ctx: &egui::Context) {
+    fn render(&mut self, ctx: &egui::Context) {
         egui::Window::new("debug").resizable(true).show(ctx, |ui| {
             ui.label("unimplemented");
             // Show window info
