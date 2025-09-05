@@ -17,7 +17,7 @@ impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         egui_extras::install_image_loaders(&cc.egui_ctx);
 
-        let mut applets = IndexMap::new();
+        let mut applets: IndexMap<String, _> = IndexMap::new();
 
         for mut applet in vec![
             Box::new(HomeApplet::default()) as Box<dyn Applet>,
@@ -31,7 +31,11 @@ impl App {
         }
 
         Self {
-            active_applet: "Home".to_string(),
+            active_applet: applets
+                .first()
+                .expect("no applets registered; line break pls")
+                .0
+                .into(),
             applets,
             #[cfg(debug_assertions)]
             show_stats: true,
