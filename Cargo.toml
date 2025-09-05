@@ -1,7 +1,7 @@
 [workspace]
 resolver = "3"
 
-members = ["crates/btk_client", "crates/btk_server"]
+members = ["crates/btk_client", "crates/btk_server", "crates/network_common"]
 
 [workspace.dependencies]
 anyhow = "1"
@@ -10,6 +10,7 @@ web-time = "1"
 redb = "2"
 blake3 = { version = "1", features = ["serde"] }
 bincode = "1"
+tokio = "1"
 
 flume = "0"
 ml-dsa = "0"

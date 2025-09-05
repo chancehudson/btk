@@ -14,8 +14,7 @@ use tokio_tungstenite::tungstenite;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
 
-use btk_server::Action;
-use btk_server::Response;
+use network_common::*;
 
 pub struct Server {
     pub listener: TcpListener,
@@ -29,7 +28,7 @@ pub struct Server {
 
 impl Server {
     pub async fn new() -> Result<Self> {
-        let addr = "0.0.0.0:1351";
+        let addr = "0.0.0.0:5001";
         let try_socket = TcpListener::bind(addr).await;
         let listener = try_socket.expect("Failed to bind");
 
@@ -154,7 +153,7 @@ impl Server {
                 }
                 // we're sending tick/keepalive
                 _ = interval.tick() => {
-                    println!("sending keepalive");
+                    // println!("sending keepalive");
                     let r = bincode::serialize(&Response::Pong)?;
                     write.send(Message::binary(r)).await?;
                 }

@@ -4,9 +4,12 @@ use web_time::Duration;
 use web_time::Instant;
 
 use crate::applets::*;
+use crate::network::DEFAULT_SERVER_URL;
+use crate::network::NetworkManager;
 
 #[derive(Default)]
 pub struct App {
+    network_manager: NetworkManager,
     show_stats: bool,
     last_render_time: Duration,
     active_applet: String,
@@ -31,6 +34,7 @@ impl App {
         }
 
         Self {
+            network_manager: NetworkManager::new(DEFAULT_SERVER_URL),
             active_applet: applets
                 .first()
                 .expect("no applets registered; line break pls")
@@ -52,6 +56,12 @@ impl eframe::App for App {
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let render_start = Instant::now();
+
+        if let Ok(msgs) = self.network_manager.receive() {
+            if !msgs.is_empty() {
+                println!("{} message received", msgs.len());
+            }
+        }
 
         // Use CMD+num_key to switch to an applet
         let number_keys = [

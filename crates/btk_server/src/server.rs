@@ -1,8 +1,8 @@
 use anyhow::Result;
 
+use network_common::*;
+
 use super::network;
-use btk_server::Action;
-use btk_server::Response;
 
 pub struct BTKServer {
     pub db: redb::Database,

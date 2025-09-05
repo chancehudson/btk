@@ -1,5 +1,6 @@
 mod app;
 mod applets;
+mod network;
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {

@@ -1,0 +1,9 @@
+[package]
+name = "network_common"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+
+[dependencies]
+serde = { workspace = true }
