@@ -33,20 +33,20 @@ impl Applet for NotesApplet {
     }
 
     fn render(&mut self, ctx: &egui::Context) {
-        egui::Window::new("scroll debug").show(ctx, |ui| {
-            ui.label("source");
-            ui.label(format!(
-                "offset: {} px, {}%",
-                self.last_source_offset,
-                100. * self.last_source_percent
-            ));
-            ui.label("rendered");
-            ui.label(format!(
-                "offset: {} px, {}%",
-                self.last_rendered_offset,
-                100. * self.last_rendered_percent
-            ));
-        });
+        // egui::Window::new("scroll debug").show(ctx, |ui| {
+        //     ui.label("source");
+        //     ui.label(format!(
+        //         "offset: {} px, {}%",
+        //         self.last_source_offset,
+        //         100. * self.last_source_percent
+        //     ));
+        //     ui.label("rendered");
+        //     ui.label(format!(
+        //         "offset: {} px, {}%",
+        //         self.last_rendered_offset,
+        //         100. * self.last_rendered_percent
+        //     ));
+        // });
 
         egui::SidePanel::left("notes_list").show(ctx, |ui| {
             ui.label("test");
@@ -59,11 +59,12 @@ impl Applet for NotesApplet {
                 let line_height = ui.text_style_height(&TextStyle::Body);
                 let desired_rows = (available_height / line_height) as usize;
                 ui.horizontal_top(|ui| {
-                    ui.set_min_height(available_height);
+                    ui.set_height(available_height);
                     Frame::new()
                         .stroke(ui.ctx().style().visuals.widgets.noninteractive.bg_stroke)
                         .fill(ui.ctx().style().visuals.widgets.open.bg_fill)
                         .show(ui, |ui| {
+                            ui.set_height(available_height);
                             let scroll_area = ScrollArea::vertical()
                                 .vertical_scroll_offset(
                                     if self.last_scrolled == LastScrolled::Source {
@@ -74,11 +75,14 @@ impl Applet for NotesApplet {
                                 )
                                 .id_salt("source_scroll_area")
                                 .show(ui, |ui| {
+                                    ui.set_height(available_height);
                                     TextEdit::multiline(&mut self.active_note)
                                         .frame(false)
-                                        .hint_text("Your markdown note here...")
+                                        .hint_text("Your markdown text here...")
                                         .clip_text(true)
-                                        .desired_rows(desired_rows)
+                                        // subtract one to avoid scroll bars on an empty text
+                                        // editor :roll_eyes:
+                                        .desired_rows(desired_rows - 1)
                                         .show(ui);
                                 });
 
@@ -108,6 +112,7 @@ impl Applet for NotesApplet {
                                 )
                                 .id_salt("rendered_scroll_area")
                                 .show(ui, |ui| {
+                                    ui.set_width(ui.available_width());
                                     CommonMarkViewer::new().show(
                                         ui,
                                         &mut self.md_cache,
