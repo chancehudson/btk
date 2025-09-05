@@ -1,0 +1,26 @@
+[package]
+name = "btk_client"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = { workspace = true }
+web-time = { workspace = true }
+
+eframe = "0.32.0"
+egui = "0.32.0"
+egui_commonmark = "0.21.1"
+egui_extras = { version = "0.32.2", features = ["image"] }
+image = { version = "0.25.8", features = ["jpeg"] }
+indexmap = "2.11.0"
+log = "0.4.28"
+
+# For web builds
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen-futures = "0.4"
+web-sys = "0.3.77"
+
+# Desktop-only dependencies
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+env_logger = "0.11"
+
