@@ -49,6 +49,33 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let render_start = Instant::now();
 
+        // Use CMD+num_key to switch to an applet
+        let number_keys = [
+            egui::Key::Num1,
+            egui::Key::Num2,
+            egui::Key::Num3,
+            egui::Key::Num4,
+            egui::Key::Num5,
+            egui::Key::Num6,
+            egui::Key::Num7,
+            egui::Key::Num8,
+            egui::Key::Num9,
+        ];
+        for (index, &key) in number_keys.iter().enumerate() {
+            if index >= self.applets.iter().len() {
+                break;
+            }
+            if ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, key)) {
+                // attempt to switch to the relevant appley
+                let (applet_name, _) = self
+                    .applets
+                    .get_index(index)
+                    .expect("logical mismatch between applets len and index");
+                self.active_applet = applet_name.into();
+            }
+        }
+
+        // frame render time stats
         if self.show_stats {
             egui::Window::new("Frame Stats")
                 .default_rect(Rect::from_min_size(
@@ -66,6 +93,7 @@ impl eframe::App for App {
                 });
         }
 
+        // top tab bar
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.columns(2, |columns| {
                 columns[0].horizontal(|ui| {
@@ -83,6 +111,7 @@ impl eframe::App for App {
             });
         });
 
+        // applet content renderer
         if let Some(applet) = self.applets.get_mut(&self.active_applet) {
             applet.render(ctx);
         } else {
