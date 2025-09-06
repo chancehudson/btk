@@ -6,6 +6,7 @@ use egui_commonmark::CommonMarkCache;
 use egui_commonmark::CommonMarkViewer;
 
 use super::Applet;
+use crate::app::AppState;
 
 #[derive(Default, PartialEq)]
 enum LastScrolled {
@@ -32,7 +33,7 @@ impl Applet for NotesApplet {
         "Notes"
     }
 
-    fn render(&mut self, ctx: &egui::Context) {
+    fn render(&mut self, ctx: &egui::Context, _state: &AppState) {
         // egui::Window::new("scroll debug").show(ctx, |ui| {
         //     ui.label("source");
         //     ui.label(format!(

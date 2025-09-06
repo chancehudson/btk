@@ -1,4 +1,5 @@
 use super::Applet;
+use crate::app::AppState;
 
 #[derive(Default)]
 pub struct HomeApplet {}
@@ -8,7 +9,7 @@ impl Applet for HomeApplet {
         "Home"
     }
 
-    fn render(&mut self, ctx: &egui::Context) {
+    fn render(&mut self, ctx: &egui::Context, _state: &AppState) {
         egui::TopBottomPanel::bottom("footer")
             .exact_height(240.0)
             .show_separator_line(false)

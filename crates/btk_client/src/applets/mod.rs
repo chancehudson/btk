@@ -10,6 +10,8 @@ pub use notes::NotesApplet;
 pub use settings::SettingsApplet;
 pub use tasks::TasksApplet;
 
+use crate::app::AppState;
+
 pub struct DefaultApplet;
 impl Applet for DefaultApplet {}
 
@@ -20,7 +22,7 @@ pub trait Applet {
         "unimplemented"
     }
 
-    fn render(&mut self, ctx: &egui::Context) {
+    fn render(&mut self, ctx: &egui::Context, _state: &AppState) {
         egui::Window::new("debug").resizable(true).show(ctx, |ui| {
             ui.label("unimplemented");
             // Show window info

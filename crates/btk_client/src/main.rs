@@ -1,5 +1,6 @@
 mod app;
 mod applets;
+mod data;
 mod network;
 
 #[cfg(not(target_arch = "wasm32"))]

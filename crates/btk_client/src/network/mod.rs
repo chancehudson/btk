@@ -18,6 +18,7 @@ pub const DEFAULT_SERVER_URL: &str = "ws://127.0.0.1:5001";
 /// switching servers.
 #[derive(Default)]
 pub struct NetworkManager {
+    active_url: String,
     connection_maybe: Option<NetworkConnection>,
 }
 
@@ -25,7 +26,20 @@ impl NetworkManager {
     /// Create a new instance of a network manager and attempt to connect.
     pub fn new(url: &str) -> Self {
         Self {
+            active_url: url.into(),
             connection_maybe: Some(NetworkConnection::attempt_connection(url.into())),
+        }
+    }
+
+    pub fn url(&self) -> &str {
+        &self.active_url
+    }
+
+    pub fn is_connected(&self) -> bool {
+        if let Some(connection) = &self.connection_maybe {
+            connection.is_open().is_ok()
+        } else {
+            false
         }
     }
 

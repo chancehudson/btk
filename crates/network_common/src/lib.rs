@@ -3,6 +3,8 @@ use serde::Serialize;
 
 /// Public data for a mutation to an encrypted cloud.
 /// Used to ensure consistency among synchronized devices.
+///
+/// Data is encypted with key H(H(private_key), index, salt), and the encrypted bytes are signed.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MutationMetadata {
     /// Global counter of mutations
@@ -16,6 +18,11 @@ pub struct MutationMetadata {
     /// Optional full public key. This must be provided if `index == 0` as the encrypted cloud is
     /// being created.
     public_key: Option<Vec<u8>>,
+    /// Salt used to compute a distinct encryption key for the mutation. This is necessary to
+    /// prevent cases where two changes for the same index are created and broadcasted, but encrypted
+    /// with the same key+nonce. Such a case would leak the key in most symmetric
+    /// encryption constructions.
+    salt: [u8; 32],
 }
 
 impl MutationMetadata {

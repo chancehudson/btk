@@ -8,7 +8,10 @@ anyhow = { workspace = true }
 web-time = { workspace = true }
 flume = { workspace = true }
 bincode = { workspace = true }
+redb = { workspace = true }
+ml-dsa = { workspace = true }
 
+directories = "6"
 eframe = "0.32.0"
 egui = "0.32.0"
 egui_commonmark = "0.21.1"

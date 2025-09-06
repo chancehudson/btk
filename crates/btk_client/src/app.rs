@@ -4,12 +4,17 @@ use web_time::Duration;
 use web_time::Instant;
 
 use crate::applets::*;
+use crate::data::LocalState;
 use crate::network::DEFAULT_SERVER_URL;
 use crate::network::NetworkManager;
 
-#[derive(Default)]
+pub struct AppState {
+    pub network_manager: NetworkManager,
+    pub local_data: LocalState,
+}
+
 pub struct App {
-    network_manager: NetworkManager,
+    state: AppState,
     show_stats: bool,
     last_render_time: Duration,
     active_applet: String,
@@ -34,7 +39,10 @@ impl App {
         }
 
         Self {
-            network_manager: NetworkManager::new(DEFAULT_SERVER_URL),
+            state: AppState {
+                network_manager: NetworkManager::new(DEFAULT_SERVER_URL),
+                local_data: LocalState::new().unwrap(),
+            },
             active_applet: applets
                 .first()
                 .expect("no applets registered; line break pls")
@@ -43,7 +51,7 @@ impl App {
             applets,
             #[cfg(debug_assertions)]
             show_stats: true,
-            ..Default::default()
+            last_render_time: Duration::default(),
         }
     }
 }
@@ -57,7 +65,7 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let render_start = Instant::now();
 
-        if let Ok(msgs) = self.network_manager.receive() {
+        if let Ok(msgs) = self.state.network_manager.receive() {
             if !msgs.is_empty() {
                 println!("{} message received", msgs.len());
             }
@@ -127,7 +135,7 @@ impl eframe::App for App {
 
         // applet content renderer
         if let Some(applet) = self.applets.get_mut(&self.active_applet) {
-            applet.render(ctx);
+            applet.render(ctx, &self.state);
         } else {
             egui::Window::new("unknown applet")
                 .resizable(true)
