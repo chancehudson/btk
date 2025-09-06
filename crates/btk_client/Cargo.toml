@@ -10,6 +10,10 @@ flume = { workspace = true }
 bincode = { workspace = true }
 redb = { workspace = true }
 ml-dsa = { workspace = true }
+anondb = { workspace = true }
+serde = { workspace = true }
+blake3 = { workspace = true }
+chacha20 = { workspace = true }
 
 directories = "6"
 eframe = "0.32.0"
@@ -22,6 +26,7 @@ log = "0.4.28"
 futures-util = { version = "0.3.31", features = ["sink"] }
 
 network_common = { path = "../network_common" }
+rand = "0.9.2"
 
 # For web builds
 [target.'cfg(target_arch = "wasm32")'.dependencies]

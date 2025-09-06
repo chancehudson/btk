@@ -16,3 +16,5 @@ flume = "0"
 ml-dsa = "0"
 chacha20 = "0"
 
+anondb = { version = "0", path = "../anondb" }
+

@@ -72,7 +72,7 @@ impl NetworkConnection {
                     let msg = msg.unwrap();
                     match msg {
                         Message::Bytes(bytes) => {
-                            if let Ok(r) = bincode::deserialize::<Response>(&bytes) {
+                            if let Ok(r) = Bytes::parse::<Response>(&bytes) {
                                 if let Err(e) = receive_tx.send(r) {
                                     println!("receive err {:?}", e);
                                     break;
@@ -91,13 +91,12 @@ impl NetworkConnection {
 
             loop {
                 while let Ok(action) = send_rx.try_recv() {
-                    if let Err(e) = write
-                        .send(Message::Bytes(bincode::serialize(&action).unwrap()))
-                        .await
-                    {
-                        println!("Error sending ws message {:?}, closing connection", e);
-                        close_tx.send(()).ok();
-                        break;
+                    if let Ok(serialized) = Bytes::encode(&action) {
+                        if let Err(e) = write.send(Message::Bytes(serialized.into_vec())).await {
+                            println!("Error sending ws message {:?}, closing connection", e);
+                            close_tx.send(()).ok();
+                            break;
+                        }
                     }
                 }
                 TimeoutFuture::new(50).await;

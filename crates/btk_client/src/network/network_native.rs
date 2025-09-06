@@ -1,3 +1,4 @@
+use anondb::Bytes;
 use anyhow::Result;
 use futures_util::SinkExt;
 use futures_util::StreamExt;
@@ -72,10 +73,9 @@ impl NetworkConnection {
                         let (mut write, mut read) = ws_stream.split();
                         tokio::spawn(async move {
                             while let Some(Ok(msg)) = read.next().await {
-                                println!("msgggggg");
                                 if msg.is_binary() {
                                     if let Ok(r) =
-                                        bincode::deserialize::<Response>(&msg.into_data())
+                                        Bytes::parse::<Response>(&msg.into_data().to_vec().into())
                                     {
                                         if let Err(e) = receive_tx.send(r) {
                                             println!("receive err {:?}", e);
@@ -90,8 +90,10 @@ impl NetworkConnection {
                             }
                         });
                         while let Ok(action) = send_rx.recv_async().await {
-                            if let Ok(serialized) = bincode::serialize(&action) {
-                                if let Err(e) = write.send(Message::binary(serialized)).await {
+                            if let Ok(serialized) = Bytes::encode(&action) {
+                                if let Err(e) =
+                                    write.send(Message::binary(serialized.into_vec())).await
+                                {
                                     println!("error sending {:?}", e);
                                     break;
                                 }

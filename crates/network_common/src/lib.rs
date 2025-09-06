@@ -1,35 +1,9 @@
+mod mutation;
+
+pub use mutation::Mutation;
+
 use serde::Deserialize;
 use serde::Serialize;
-
-/// Public data for a mutation to an encrypted cloud.
-/// Used to ensure consistency among synchronized devices.
-///
-/// Data is encypted with key H(H(private_key), index, salt), and the encrypted bytes are signed.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct MutationMetadata {
-    /// Global counter of mutations
-    index: u64,
-    /// Encrypted mutation/diff/action
-    data: Vec<u8>,
-    /// Variable length signature, impl defined algo
-    signature: Vec<u8>,
-    /// 32 byte public key hash, impl defined algo
-    public_key_hash: [u8; 32],
-    /// Optional full public key. This must be provided if `index == 0` as the encrypted cloud is
-    /// being created.
-    public_key: Option<Vec<u8>>,
-    /// Salt used to compute a distinct encryption key for the mutation. This is necessary to
-    /// prevent cases where two changes for the same index are created and broadcasted, but encrypted
-    /// with the same key+nonce. Such a case would leak the key in most symmetric
-    /// encryption constructions.
-    salt: [u8; 32],
-}
-
-impl MutationMetadata {
-    pub fn hash() -> [u8; 32] {
-        unimplemented!();
-    }
-}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[repr(u8)]
@@ -38,7 +12,7 @@ pub enum Action {
     /// All 32 byte sequences represent a valid cloud identifier.
     /// Mutation of cloud requires proving knowledge of private key using a signature.
     /// All clouds are implicitly initialized with 0 mutations (no data).
-    MutateCloud(MutationMetadata),
+    MutateCloud(Mutation),
     /// Authenticate as a member of a cloud. Begin receiving `CloudMutated` responses.
     ///
     /// `pubkey_hash, signature_bytes`
@@ -61,7 +35,7 @@ pub enum Response {
     /// `latest_known_index, mutation_hash`
     CloudMutated(u64, [u8; 32]),
     /// Retrieve the canonical mutation data for a certain mutation index.
-    CloudMutation(MutationMetadata),
+    CloudMutation(Mutation),
     /// keepalive mechanism
     Pong,
 }
