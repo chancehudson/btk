@@ -28,7 +28,7 @@ pub struct Cloud {
 }
 
 impl Cloud {
-    /// Accept an anondb transaction and trustlessly replicate it.
+    /// Accept an anondb transaction and create a trustless representation.
     fn encrypt_tx(&self, index: u64, transaction: Vec<TransactionOperation>) -> Result<Mutation> {
         let signer = MlDsa87::key_gen_internal(&self.prvkey.into());
 
@@ -41,7 +41,7 @@ impl Cloud {
 
         // now we can encrypt the transaction data
 
-        let mut tx_bytes = Bytes::encode(&transaction)?.to_vec();
+        let mut tx_bytes: Vec<u8> = Bytes::encode(&transaction)?.into();
         let mut chacha = ChaCha20::new(
             mutation_key.as_slice().into(),
             // we can safely choose 0 as the nonce because the encryption key is salted with a
@@ -105,7 +105,7 @@ impl Cloud {
     }
 
     #[cfg(target_arch = "wasm32")]
-    pub fn new(url: String) -> Result<Self> {
+    pub fn new(url: String, prvkey: [u8; 32]) -> Result<Self> {
         let signer = MlDsa87::key_gen_internal(&prvkey.into());
         let prvkey_hash = blake3::hash(&prvkey).as_bytes().clone();
         let pubkey_hash = blake3::hash(&signer.verifying_key().encode().to_vec())
@@ -117,7 +117,7 @@ impl Cloud {
             pubkey_hash,
             url,
             connection_maybe: None,
-            db: Journal::in_memory(None)?,
+            local_db: Journal::in_memory(None)?,
             local_data_path: None,
         })
     }

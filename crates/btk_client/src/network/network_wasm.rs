@@ -1,3 +1,4 @@
+use anondb::Bytes;
 use anyhow::Result;
 use futures_util::SinkExt;
 use futures_util::StreamExt;
@@ -72,7 +73,7 @@ impl NetworkConnection {
                     let msg = msg.unwrap();
                     match msg {
                         Message::Bytes(bytes) => {
-                            if let Ok(r) = Bytes::parse::<Response>(&bytes) {
+                            if let Ok(r) = Bytes::parse::<Response>(&bytes.into()) {
                                 if let Err(e) = receive_tx.send(r) {
                                     println!("receive err {:?}", e);
                                     break;
@@ -92,7 +93,7 @@ impl NetworkConnection {
             loop {
                 while let Ok(action) = send_rx.try_recv() {
                     if let Ok(serialized) = Bytes::encode(&action) {
-                        if let Err(e) = write.send(Message::Bytes(serialized.into_vec())).await {
+                        if let Err(e) = write.send(Message::Bytes(serialized.into())).await {
                             println!("Error sending ws message {:?}, closing connection", e);
                             close_tx.send(()).ok();
                             break;

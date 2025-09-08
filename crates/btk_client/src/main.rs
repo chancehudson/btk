@@ -52,7 +52,7 @@ fn main() {
             .start(
                 canvas,
                 web_options,
-                Box::new(|cc| Ok(Box::new(app::App::new(cc)))),
+                Box::new(|cc| Ok(Box::new(app::App::new(cc)?))),
             )
             .await;
     });

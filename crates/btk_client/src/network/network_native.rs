@@ -91,8 +91,9 @@ impl NetworkConnection {
                         });
                         while let Ok(action) = send_rx.recv_async().await {
                             if let Ok(serialized) = Bytes::encode(&action) {
-                                if let Err(e) =
-                                    write.send(Message::binary(serialized.into_vec())).await
+                                if let Err(e) = write
+                                    .send(Message::binary::<Vec<u8>>(serialized.into()))
+                                    .await
                                 {
                                     println!("error sending {:?}", e);
                                     break;
