@@ -1,3 +1,4 @@
+use anyhow::Result;
 use egui::Frame;
 use egui::ScrollArea;
 use egui::TextEdit;
@@ -18,6 +19,7 @@ enum LastScrolled {
 #[derive(Default)]
 pub struct NotesApplet {
     md_cache: CommonMarkCache,
+    active_note_name: String,
     active_note: String,
     last_scrolled: LastScrolled,
     last_source_offset: f32,
@@ -28,12 +30,19 @@ pub struct NotesApplet {
     last_rendered_height: f32,
 }
 
+impl NotesApplet {
+    fn save(&self, state: AppState) -> Result<()> {
+        // state.local_data.db.insert()
+        Ok(())
+    }
+}
+
 impl Applet for NotesApplet {
     fn name(&self) -> &str {
         "Notes"
     }
 
-    fn render(&mut self, ctx: &egui::Context, _state: &AppState) {
+    fn render(&mut self, ctx: &egui::Context, state: &AppState) {
         // egui::Window::new("scroll debug").show(ctx, |ui| {
         //     ui.label("source");
         //     ui.label(format!(
@@ -54,9 +63,15 @@ impl Applet for NotesApplet {
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Editor");
+            ui.horizontal_top(|ui| {
+                let _ = ui.text_edit_singleline(&mut self.active_note_name);
+                let _ = ui.button("save");
+                let _ = ui.button("share");
+                let _ = ui.button("info");
+            });
             ui.allocate_ui(ui.available_size(), |ui| {
                 let available_height = ui.available_height();
+                println!("{available_height}");
                 let line_height = ui.text_style_height(&TextStyle::Body);
                 let desired_rows = (available_height / line_height) as usize;
                 ui.horizontal_top(|ui| {
@@ -83,7 +98,7 @@ impl Applet for NotesApplet {
                                         .clip_text(true)
                                         // subtract one to avoid scroll bars on an empty text
                                         // editor :roll_eyes:
-                                        .desired_rows(desired_rows - 1)
+                                        .desired_rows(desired_rows.max(1) - 1)
                                         .show(ui);
                                 });
 
@@ -91,8 +106,11 @@ impl Applet for NotesApplet {
                                 (scroll_area.content_size.y - ui.available_height()).max(0.0);
                             if (scroll_area.state.offset.y - self.last_source_offset).abs() > 0.1 {
                                 self.last_source_offset = scroll_area.state.offset.y;
-                                self.last_source_percent =
-                                    self.last_source_offset / self.last_source_height;
+                                self.last_source_percent = if self.last_source_height > 1.0 {
+                                    self.last_source_offset / self.last_source_height
+                                } else {
+                                    0.0
+                                };
 
                                 self.last_scrolled = LastScrolled::Source;
                             }
@@ -127,6 +145,11 @@ impl Applet for NotesApplet {
                                 self.last_rendered_offset = scroll_area.state.offset.y;
                                 self.last_rendered_percent =
                                     scroll_area.state.offset.y / self.last_rendered_height;
+                                self.last_rendered_percent = if self.last_rendered_height > 1.0 {
+                                    self.last_rendered_offset / self.last_rendered_height
+                                } else {
+                                    0.0
+                                };
                                 self.last_scrolled = LastScrolled::Rendered;
                             }
                         });
