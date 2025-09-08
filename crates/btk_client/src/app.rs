@@ -1,3 +1,4 @@
+use anyhow::Result;
 use egui::Rect;
 use indexmap::IndexMap;
 use web_time::Duration;
@@ -22,8 +23,12 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>) -> Result<Self> {
         egui_extras::install_image_loaders(&cc.egui_ctx);
+        let state = AppState {
+            network_manager: NetworkManager::new(DEFAULT_SERVER_URL),
+            local_data: LocalState::new().unwrap(),
+        };
 
         let mut applets: IndexMap<String, _> = IndexMap::new();
 
@@ -34,15 +39,12 @@ impl App {
             Box::new(MailApplet::default()) as Box<dyn Applet>,
             Box::new(SettingsApplet::default()) as Box<dyn Applet>,
         ] {
-            applet.as_mut().init();
+            applet.as_mut().init(&state)?;
             applets.insert(applet.name().into(), applet);
         }
 
-        Self {
-            state: AppState {
-                network_manager: NetworkManager::new(DEFAULT_SERVER_URL),
-                local_data: LocalState::new().unwrap(),
-            },
+        Ok(Self {
+            state,
             active_applet: applets
                 .first()
                 .expect("no applets registered; line break pls")
@@ -52,25 +54,12 @@ impl App {
             #[cfg(debug_assertions)]
             show_stats: true,
             last_render_time: Duration::default(),
-        }
+        })
     }
 }
 
-impl eframe::App for App {
-    /// Called by the framework to save state before shutdown.
-    fn save(&mut self, _storage: &mut dyn eframe::Storage) {
-        // eframe::set_value(storage, eframe::APP_KEY, self);
-    }
-
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let render_start = Instant::now();
-
-        if let Ok(msgs) = self.state.network_manager.receive() {
-            if !msgs.is_empty() {
-                println!("{} message received", msgs.len());
-            }
-        }
-
+impl App {
+    fn handle_keyboard_input(&mut self, ctx: &egui::Context) {
         // Use CMD+num_key to switch to an applet
         let number_keys = [
             egui::Key::Num1,
@@ -96,7 +85,9 @@ impl eframe::App for App {
                 self.active_applet = applet_name.into();
             }
         }
+    }
 
+    fn show_framerate_window(&self, ctx: &egui::Context) {
         // frame render time stats
         if self.show_stats {
             egui::Window::new("Frame Stats")
@@ -113,6 +104,39 @@ impl eframe::App for App {
                     ui.label(format!("Render time: {:.2} ms", frame_time_ms));
                     ui.label(format!("FPS: {:.1}", fps));
                 });
+        }
+    }
+}
+
+impl eframe::App for App {
+    /// Called by the framework to save state before shutdown.
+    fn save(&mut self, _storage: &mut dyn eframe::Storage) {
+        // eframe::set_value(storage, eframe::APP_KEY, self);
+    }
+
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // egui_taffy stuff
+        // Enable multipass rendering upon request without drawing to screen
+        ctx.options_mut(|options| {
+            options.max_passes = std::num::NonZeroUsize::new(3).unwrap();
+        });
+
+        // Disable text wrapping
+        //
+        // egui text layouting tries to utilize minimal width possible
+        ctx.style_mut(|style| {
+            style.wrap_mode = Some(egui::TextWrapMode::Extend);
+        });
+
+        let render_start = Instant::now();
+
+        self.handle_keyboard_input(ctx);
+        self.show_framerate_window(ctx);
+
+        if let Ok(msgs) = self.state.network_manager.receive() {
+            if !msgs.is_empty() {
+                println!("{} message received", msgs.len());
+            }
         }
 
         // top tab bar

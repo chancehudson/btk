@@ -23,7 +23,7 @@ pub struct Mutation {
     /// with the same key+nonce. Such a case would leak the key in most symmetric
     /// encryption constructions.
     pub salt: [u8; 32],
-    /// Optionally provide the encryption key for the mutation. Setting this value amkes the
+    /// Optionally provide the encryption key for the mutation. Setting this value makes the
     /// mutation irreversibly public.
     pub mutation_key: Option<[u8; 32]>,
 }

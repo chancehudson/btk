@@ -1,3 +1,5 @@
+use anyhow::Result;
+
 mod home;
 mod mail;
 mod notes;
@@ -16,7 +18,9 @@ pub struct DefaultApplet;
 impl Applet for DefaultApplet {}
 
 pub trait Applet {
-    fn init(&mut self) {}
+    fn init(&mut self, _state: &AppState) -> Result<()> {
+        Ok(())
+    }
 
     fn name(&self) -> &str {
         "unimplemented"
