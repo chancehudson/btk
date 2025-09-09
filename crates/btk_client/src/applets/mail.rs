@@ -10,7 +10,7 @@ impl Applet for MailApplet {
     }
 
     fn render(&mut self, ctx: &egui::Context, _state: &AppState) {
-        egui::Window::new("mail").resizable(true).show(ctx, |ui| {
+        egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("actually fuck gmail");
             ui.label("they built a rest api and put pop3/imap behind oauth");
             ui.label("this is a direct attack on information ownership");

@@ -36,8 +36,17 @@ pub struct App {
 
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Result<Self> {
+        // setup egui/taffy rendering stuff
         egui_extras::install_image_loaders(&cc.egui_ctx);
 
+        cc.egui_ctx.options_mut(|options| {
+            options.max_passes = std::num::NonZeroUsize::new(2).unwrap();
+        });
+        cc.egui_ctx.style_mut(|style| {
+            style.wrap_mode = Some(egui::TextWrapMode::Extend);
+        });
+
+        // construct application state
         let mut state = AppState {
             network_manager: NetworkManager::new(DEFAULT_SERVER_URL),
             local_data: LocalState::new()?,
@@ -50,12 +59,6 @@ impl App {
             // trigger an event being sent so applets can handle loading
             state.switch_cloud(cloud_id);
         }
-        cc.egui_ctx.options_mut(|options| {
-            options.max_passes = std::num::NonZeroUsize::new(2).unwrap();
-        });
-        cc.egui_ctx.style_mut(|style| {
-            style.wrap_mode = Some(egui::TextWrapMode::Extend);
-        });
 
         let mut applets: IndexMap<String, _> = IndexMap::new();
 

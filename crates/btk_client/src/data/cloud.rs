@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::path::PathBuf;
 
 use anondb::Bytes;
@@ -55,6 +56,7 @@ pub struct Cloud {
     pub db: Journal,
     id: [u8; 32],
     remote: Option<RemoteCloud>,
+    filepath: Option<PathBuf>,
 }
 
 impl Cloud {
@@ -71,6 +73,10 @@ impl Cloud {
             .iter()
             .map(|b| format!("{:02x}", b))
             .collect::<String>()
+    }
+
+    pub fn filepath(&self) -> Option<&PathBuf> {
+        self.filepath.as_ref()
     }
 
     pub fn set_metadata(&mut self, metadata: CloudMetadata) -> Result<()> {
@@ -110,10 +116,11 @@ impl Cloud {
         let public_key = signer.verifying_key().encode().to_vec();
         let id: [u8; 32] = blake3::hash(&public_key).into();
         let hex_string = hex::encode(&id) + ".redb";
-        let db = if let Some(data_dir) = data_dir_maybe {
-            Journal::at_path(&data_dir.join(hex_string))?
+        let (db, filepath_maybe) = if let Some(data_dir) = data_dir_maybe {
+            let filepath = data_dir.join(hex_string);
+            (Journal::at_path(&filepath)?, Some(filepath))
         } else {
-            Journal::in_memory(None)?
+            (Journal::in_memory(None)?, None)
         };
         let metadata = if let Some(metadata) = db.get(CLOUD_TABLE, &METADATA_KEY.to_string())? {
             metadata
@@ -126,6 +133,7 @@ impl Cloud {
         Ok(Self {
             id,
             db,
+            filepath: filepath_maybe,
             private_key,
             public_key,
             latest_known_index: 0,
