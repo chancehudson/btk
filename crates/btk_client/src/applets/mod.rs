@@ -14,7 +14,8 @@ pub use notes::NotesApplet;
 pub use settings::SettingsApplet;
 pub use tasks::TasksApplet;
 
-use crate::app::{AppEvent, AppState};
+use crate::app::AppEvent;
+use crate::app_state::AppState;
 
 pub struct DefaultApplet;
 impl Applet for DefaultApplet {}

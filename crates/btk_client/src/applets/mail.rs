@@ -1,6 +1,6 @@
 use super::Applet;
 
-use crate::app::AppState;
+use crate::app_state::AppState;
 
 #[derive(Default)]
 pub struct MailApplet;

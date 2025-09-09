@@ -12,7 +12,7 @@ use egui_taffy::taffy::prelude::*;
 
 use super::Applet;
 use crate::app::AppEvent;
-use crate::app::AppState;
+use crate::app_state::AppState;
 
 #[derive(Default, PartialEq)]
 enum LastScrolled {
@@ -235,7 +235,7 @@ impl Applet for NotesApplet {
         //     ));
         // });
 
-        for event in state.pending_app_events() {
+        for event in state.drain_pending_app_events() {
             match event {
                 AppEvent::ActiveAppletChanged => {
                     if self.active_note_name.is_empty() {

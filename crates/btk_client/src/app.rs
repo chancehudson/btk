@@ -4,41 +4,11 @@ use indexmap::IndexMap;
 use web_time::Duration;
 use web_time::Instant;
 
+use crate::app_state::AppState;
 use crate::applets::*;
 use crate::data::LocalState;
 use crate::network::DEFAULT_SERVER_URL;
 use crate::network::NetworkManager;
-
-pub struct AppState {
-    pub network_manager: NetworkManager,
-    pub local_data: LocalState,
-    pending_events: (flume::Sender<AppEvent>, flume::Receiver<AppEvent>),
-    pending_requests: (flume::Sender<ActionRequest>, flume::Receiver<ActionRequest>),
-}
-
-impl AppState {
-    pub fn pending_app_events(&self) -> Vec<AppEvent> {
-        self.pending_events.1.drain().collect()
-    }
-
-    pub fn switch_cloud(&self, id: [u8; 32]) {
-        self.pending_requests
-            .0
-            .send(ActionRequest::SwitchCloud(id))
-            .expect("failed to send app request");
-    }
-
-    pub fn reload_clouds(&self) {
-        self.pending_requests
-            .0
-            .send(ActionRequest::LoadClouds)
-            .expect("failed to send app request");
-    }
-
-    pub fn pending_app_requests(&self) -> Vec<ActionRequest> {
-        self.pending_requests.1.drain().collect()
-    }
-}
 
 pub enum AppEvent {
     ActiveAppletChanged,
@@ -232,7 +202,7 @@ impl eframe::App for App {
         }
         self.last_render_time = Instant::now().duration_since(render_start);
         self.state.pending_events.1.drain();
-        for r in self.state.pending_app_requests() {
+        for r in self.state.drain_pending_app_requests() {
             match r {
                 ActionRequest::LoadClouds => {
                     self.state
