@@ -7,4 +7,6 @@ edition = "2024"
 
 [dependencies]
 serde = { workspace = true }
-anondb = { workspace = true }
+anyhow = { workspace = true }
+ml-dsa = { workspace = true }
+blake3 = { workspace = true }

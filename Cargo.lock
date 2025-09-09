@@ -717,12 +717,14 @@ dependencies = [
 name = "btk_server"
 version = "0.1.0"
 dependencies = [
+ "anondb",
  "anyhow",
  "bincode",
  "blake3",
  "dashmap",
  "flume",
  "futures-util",
+ "hex",
  "nanoid",
  "network_common",
  "once_cell",
@@ -2782,7 +2784,9 @@ dependencies = [
 name = "network_common"
 version = "0.1.0"
 dependencies = [
- "anondb",
+ "anyhow",
+ "blake3",
+ "ml-dsa",
  "serde",
 ]
 

@@ -85,7 +85,7 @@ impl NetworkConnection {
                                         println!("failed to deserialize response");
                                     }
                                 } else {
-                                    println!("non-binary message");
+                                    println!("non-binary message: {:?}", msg);
                                 }
                             }
                         });

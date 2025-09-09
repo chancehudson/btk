@@ -10,9 +10,8 @@ use web_time::Instant;
 
 use crate::app_state::AppState;
 use crate::applets::*;
+use crate::data::CloudMetadata;
 use crate::data::LocalState;
-use crate::network::DEFAULT_SERVER_URL;
-use crate::network::NetworkManager;
 
 pub enum AppEvent {
     ActiveAppletChanged,
@@ -23,6 +22,7 @@ pub enum ActionRequest {
     LoadClouds,
     // the id to switch to
     SwitchCloud([u8; 32]),
+    UpdateCloudMetadata([u8; 32], CloudMetadata),
 }
 
 pub struct App {
@@ -48,7 +48,6 @@ impl App {
 
         // construct application state
         let mut state = AppState {
-            network_manager: NetworkManager::new(DEFAULT_SERVER_URL),
             local_data: LocalState::new()?,
             pending_events: flume::unbounded(),
             pending_requests: flume::unbounded(),
@@ -233,6 +232,12 @@ impl eframe::App for App {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        for cloud in self.state.local_data.clouds.values_mut() {
+            cloud
+                .update()
+                .expect(&format!("cloud {} failed to update", cloud.metadata.name));
+        }
+
         let render_start = Instant::now();
 
         let pending_events = self.state.pending_events.1.drain().collect();
@@ -253,12 +258,6 @@ impl eframe::App for App {
 
         self.handle_keyboard_input(ctx);
         self.show_framerate_window(ctx);
-
-        if let Ok(msgs) = self.state.network_manager.receive() {
-            if !msgs.is_empty() {
-                println!("{} message received", msgs.len());
-            }
-        }
 
         // top tab bar
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
@@ -315,6 +314,15 @@ impl eframe::App for App {
         self.state.pending_events.1.drain();
         for r in self.state.drain_pending_app_requests() {
             match r {
+                ActionRequest::UpdateCloudMetadata(cloud_id, new_metadata) => {
+                    if let Some(cloud) = self.state.local_data.clouds.get_mut(&cloud_id) {
+                        cloud
+                            .set_metadata(new_metadata)
+                            .expect("failed to update cloud metadat");
+                    } else {
+                        println!("WARNING: attempting to update metadata for unknown cloud");
+                    }
+                }
                 ActionRequest::LoadClouds => {
                     self.state
                         .local_data

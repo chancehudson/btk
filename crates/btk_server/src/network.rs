@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use anondb::Bytes;
 use anyhow::Result;
 use dashmap::DashMap;
 use futures_util::SinkExt;
@@ -114,7 +115,8 @@ impl Server {
                 res = recv.recv() => {
                     match res {
                         Some(res) => {
-                            write.send(Message::binary(bincode::serialize(&res)?)).await?;
+                            let bytes = Bytes::encode(&res)?.to_vec();
+                            write.send(Message::binary(bytes)).await?;
                         }
                         None => {
                             // this should be unreachable, but we'll include logic for it
@@ -136,7 +138,7 @@ impl Server {
                             }
                             let msg = msg.unwrap();
                             if msg.is_binary() {
-                                let action = bincode::deserialize::<Action>(&msg.clone().into_data())?;
+                                let action = Bytes::from(&msg.clone().into_data().to_vec()).parse::<Action>()?;
                                 // println!("{:?}", action);
                                 self.pending_actions.0.send((socket_id.to_string(), action)).unwrap();
                             } else if msg.is_close() {

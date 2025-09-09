@@ -5,7 +5,6 @@ use crate::network::NetworkManager;
 
 /// A state object that is accessible in all applets.
 pub struct AppState {
-    pub network_manager: NetworkManager,
     pub local_data: LocalState,
     pub pending_events: (flume::Sender<AppEvent>, flume::Receiver<AppEvent>),
     pub pending_requests: (flume::Sender<ActionRequest>, flume::Receiver<ActionRequest>),

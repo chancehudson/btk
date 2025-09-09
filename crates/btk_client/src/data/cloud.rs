@@ -1,9 +1,8 @@
-use std::path::Path;
 use std::path::PathBuf;
 
 use anondb::Bytes;
 use anondb::Journal;
-use anondb::TransactionOperation;
+use anondb::JournalTransaction;
 use anyhow::Result;
 use chacha20::ChaCha20;
 use chacha20::cipher::KeyIvInit;
@@ -11,6 +10,8 @@ use chacha20::cipher::StreamCipher;
 use ml_dsa::KeyGen;
 use ml_dsa::MlDsa87;
 use ml_dsa::signature::SignerMut;
+use network_common::Action;
+use network_common::Response;
 use serde::Deserialize;
 use serde::Serialize;
 use web_time::SystemTime;
@@ -27,6 +28,8 @@ pub struct CloudMetadata {
     pub created_at: u64,
     pub name: String,
     pub description: String,
+    #[serde(default)]
+    pub remote_url: Option<String>,
 }
 
 impl Default for CloudMetadata {
@@ -39,6 +42,7 @@ impl Default for CloudMetadata {
                 .as_secs(),
             name: generator.next().unwrap_or_default(),
             description: String::default(),
+            remote_url: None,
         }
     }
 }
@@ -83,6 +87,49 @@ impl Cloud {
         self.db
             .insert(CLOUD_TABLE, &METADATA_KEY.to_string(), &metadata)?;
         self.metadata = metadata;
+        if let Some(remote_url) = &self.metadata.remote_url {
+            self.remote = Some(RemoteCloud::new(remote_url.clone()));
+        }
+        Ok(())
+    }
+
+    /// Called each frame
+    pub fn update(&mut self) -> Result<()> {
+        if let Some(remote) = self.remote.as_ref() {
+            for response in remote.receive()? {
+                match response {
+                    Response::Pong => {}
+                    Response::CloudMutated(index, cloud_id) => {
+                        // if we already have this mutation ignore it
+                        let db_state = self.db.get_state()?;
+                        if index >= db_state.next_tx_index {
+                            // we want to download this change
+                            remote.send(Action::GetMutation(cloud_id, index))?;
+                        }
+                    }
+                    Response::Authenticated(_) => {}
+                    Response::CloudMutation(mutation) => {
+                        let db_state = self.db.get_state()?;
+                        if mutation.index == db_state.next_tx_index {
+                            let tx = self.decrypt_tx(mutation)?;
+                            self.db.append_tx(&tx.operations)?;
+                        } else {
+                            println!("received out of order mutation");
+                        }
+                    }
+                }
+            }
+            for tx in self.db.drain_transactions()? {
+                let mutation = self.encrypt_tx(tx)?;
+                #[cfg(debug_assertions)]
+                {
+                    if let Err(e) = mutation.verify(self.public_key.clone()) {
+                        println!("Failed to verify mutation: {:?}", e);
+                    }
+                }
+                remote.send(Action::MutateCloud(mutation))?;
+            }
+        }
         Ok(())
     }
 
@@ -129,6 +176,11 @@ impl Cloud {
             db.insert(CLOUD_TABLE, &METADATA_KEY.to_string(), &metadata)?;
             metadata
         };
+        let remote = if let Some(remote_url) = &metadata.remote_url {
+            Some(RemoteCloud::new(remote_url.clone()))
+        } else {
+            None
+        };
 
         Ok(Self {
             id,
@@ -137,18 +189,49 @@ impl Cloud {
             private_key,
             public_key,
             latest_known_index: 0,
-            remote: None,
+            remote,
             metadata,
         })
     }
 
+    fn decrypt_tx(&self, mutation: Mutation) -> Result<JournalTransaction> {
+        let signer = MlDsa87::key_gen_internal(&self.private_key.into());
+
+        if &mutation.public_key_hash != self.id() {
+            anyhow::bail!(
+                "received mutation for wrong cloud id: {}",
+                self.metadata.name
+            );
+        }
+        let salt: &[u8; 32] = &mutation.salt;
+
+        mutation.verify(signer.verifying_key().encode().to_vec())?;
+
+        let mutation_key_preimage = Bytes::encode(&(&self.private_key, mutation.index, &salt))?;
+        let mutation_key = blake3::hash(&mutation_key_preimage.as_slice())
+            .as_bytes()
+            .to_vec();
+
+        let mut tx_bytes = mutation.data; // encrypted tx data
+        let mut chacha = ChaCha20::new(
+            mutation_key.as_slice().into(),
+            // we can safely choose 0 as the nonce because the encryption key is salted with a
+            // strong random value preventing any encryption key from being used twice.
+            vec![0_u8; 12].as_slice().into(),
+        );
+        chacha.apply_keystream(&mut tx_bytes);
+
+        // tx_bytes is now decrypted
+        Ok(Bytes::parse(&tx_bytes.into())?)
+    }
+
     /// Accept an anondb transaction and create a trustless representation.
-    fn encrypt_tx(&self, index: u64, transaction: Vec<TransactionOperation>) -> Result<Mutation> {
+    fn encrypt_tx(&self, transaction: JournalTransaction) -> Result<Mutation> {
         let mut signer = MlDsa87::key_gen_internal(&self.private_key.into());
 
         let salt: [u8; 32] = rand::random();
 
-        let mutation_key_preimage = Bytes::encode(&(&self.private_key, index, &salt))?;
+        let mutation_key_preimage = Bytes::encode(&(&self.private_key, transaction.index, &salt))?;
         let mutation_key = blake3::hash(&mutation_key_preimage.as_slice())
             .as_bytes()
             .to_vec();
@@ -160,7 +243,7 @@ impl Cloud {
             mutation_key.as_slice().into(),
             // we can safely choose 0 as the nonce because the encryption key is salted with a
             // strong random value preventing any encryption key from being used twice.
-            vec![0_u8; 32].as_slice().into(),
+            vec![0_u8; 12].as_slice().into(),
         );
         chacha.apply_keystream(&mut tx_bytes);
         drop(chacha);
@@ -170,11 +253,11 @@ impl Cloud {
         let signature = signer.sign(&tx_bytes).encode().to_vec();
 
         Ok(Mutation {
-            index,
+            index: transaction.index,
             data: tx_bytes,
             signature,
             public_key_hash: self.id,
-            public_key: if index == 0 {
+            public_key: if transaction.index == 0 {
                 Some(self.public_key.clone())
             } else {
                 None

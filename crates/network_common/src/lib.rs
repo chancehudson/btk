@@ -14,13 +14,12 @@ pub enum Action {
     /// All clouds are implicitly initialized with 0 mutations (no data).
     MutateCloud(Mutation),
     /// Authenticate as a member of a cloud. Begin receiving `CloudMutated` responses.
-    ///
     /// `pubkey_hash, signature_bytes`
     AuthCloud([u8; 32], Vec<u8>),
     /// Get a mutation by index. AuthCloud must be invoked first.
     ///
-    /// `mutation_index`
-    GetMutation(u64),
+    /// `cloud_id, mutation_index`
+    GetMutation([u8; 32], u64),
     /// keepalive mechanism
     Ping,
 }

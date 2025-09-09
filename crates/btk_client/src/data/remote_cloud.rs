@@ -14,6 +14,21 @@ pub struct RemoteCloud {
 }
 
 impl RemoteCloud {
+    pub fn new(url: String) -> Self {
+        Self {
+            connection_maybe: Some(Arc::new(NetworkConnection::attempt_connection(url.clone()))),
+            url,
+        }
+    }
+
+    pub fn reconnect_if_needed(&mut self) {
+        if !self.is_connected() {
+            self.connection_maybe = Some(Arc::new(NetworkConnection::attempt_connection(
+                self.url.clone(),
+            )));
+        }
+    }
+
     pub fn is_connected(&self) -> bool {
         if let Some(connection) = &self.connection_maybe {
             connection.is_open().is_ok()
@@ -22,7 +37,7 @@ impl RemoteCloud {
         }
     }
 
-    fn send(&self, action: Action) -> Result<()> {
+    pub fn send(&self, action: Action) -> Result<()> {
         if let Some(connection) = &self.connection_maybe {
             connection.write_connection(action);
             Ok(())
@@ -31,7 +46,7 @@ impl RemoteCloud {
         }
     }
 
-    fn receive(&self) -> Result<Vec<Response>> {
+    pub fn receive(&self) -> Result<Vec<Response>> {
         if let Some(connection) = &self.connection_maybe {
             Ok(connection.read_connection())
         } else {
