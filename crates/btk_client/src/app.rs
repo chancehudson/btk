@@ -46,6 +46,10 @@ impl App {
         };
 
         state.local_data.init()?;
+        if let Some(cloud_id) = state.local_data.active_cloud_id {
+            // trigger an event being sent so applets can handle loading
+            state.switch_cloud(cloud_id);
+        }
         cc.egui_ctx.options_mut(|options| {
             options.max_passes = std::num::NonZeroUsize::new(2).unwrap();
         });
