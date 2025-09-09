@@ -75,6 +75,7 @@ impl App {
 
         for mut applet in vec![
             Box::new(HomeApplet::default()) as Box<dyn Applet>,
+            Box::new(FilesApplet::default()) as Box<dyn Applet>,
             Box::new(NotesApplet::default()) as Box<dyn Applet>,
             Box::new(TasksApplet::default()) as Box<dyn Applet>,
             Box::new(MailApplet::default()) as Box<dyn Applet>,

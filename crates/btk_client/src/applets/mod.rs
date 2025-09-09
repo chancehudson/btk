@@ -1,11 +1,13 @@
 use anyhow::Result;
 
+mod files;
 mod home;
 mod mail;
 mod notes;
 mod settings;
 mod tasks;
 
+pub use files::FilesApplet;
 pub use home::HomeApplet;
 pub use mail::MailApplet;
 pub use notes::NotesApplet;

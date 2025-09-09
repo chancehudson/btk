@@ -1,7 +1,10 @@
 use std::collections::HashSet;
 
-use egui_taffy::taffy::{Overflow, Point, prelude::*};
-use egui_taffy::{Tui, TuiBuilderLogic};
+use egui_taffy::Tui;
+use egui_taffy::TuiBuilderLogic;
+use egui_taffy::taffy::Overflow;
+use egui_taffy::taffy::Point;
+use egui_taffy::taffy::prelude::*;
 
 use super::Applet;
 use crate::app::AppState;
