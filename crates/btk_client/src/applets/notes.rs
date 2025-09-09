@@ -2,7 +2,6 @@ use anondb::Journal;
 use anyhow::Result;
 use egui::Color32;
 use egui::Frame;
-use egui::InputState;
 use egui::ScrollArea;
 use egui::TextEdit;
 use egui::TextStyle;
@@ -60,6 +59,7 @@ impl NotesApplet {
     fn reload_note_names(&mut self, state: &AppState) -> Result<()> {
         self.note_names = state
             .local_data
+            .active_cloud()?
             .db
             .find_many::<String, (), _>(NOTES_TABLE_NAME, |_, _| true)
             .unwrap_or(vec![])
@@ -86,7 +86,7 @@ impl NotesApplet {
 
         // load the diffs and apply them to construct the latest state
         let mut active_note = String::default();
-        let tx = state.local_data.db.begin_read()?;
+        let tx = state.local_data.active_cloud()?.db.begin_read()?;
         let table = tx.open_table(Journal::table_definition(&Self::table_name(&note_name)))?;
         let mut range = table.range::<anondb::Bytes>(..)?;
         while let Some(entry) = range.next() {
@@ -113,7 +113,7 @@ impl NotesApplet {
         }
         // We'll save each note to its own table. Each entry in the table represents a diff from
         // the previous version.
-        let mut tx = state.local_data.db.begin_write()?;
+        let mut tx = state.local_data.active_cloud()?.db.begin_write()?;
 
         // Save our text diff for the current note
         let mut note_table = tx.open_table(&Self::table_name(&self.active_note_name))?;
@@ -201,12 +201,26 @@ impl NotesApplet {
 
 impl Applet for NotesApplet {
     fn init(&mut self, state: &AppState) -> Result<()> {
-        self.reload_note_names(state)?;
         Ok(())
     }
 
     fn name(&self) -> &str {
         "Notes"
+    }
+
+    fn handle_app_events(&mut self, events: &Vec<AppEvent>, state: &AppState) -> Result<()> {
+        for event in events {
+            match event {
+                AppEvent::ActiveAppletChanged => {
+                    self.reload_note_names(state)?;
+                }
+                AppEvent::ActiveCloudChanged => {
+                    self.reload_note_names(state)?;
+                    self.reset_note_state();
+                }
+            }
+        }
+        Ok(())
     }
 
     fn render(&mut self, ctx: &egui::Context, state: &AppState) {
@@ -234,6 +248,7 @@ impl Applet for NotesApplet {
                         ctx.memory_mut(|mem| mem.request_focus(INPUT_NOTE_SOURCE.into()));
                     }
                 }
+                _ => {}
             }
         }
 

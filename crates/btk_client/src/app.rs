@@ -13,16 +13,42 @@ pub struct AppState {
     pub network_manager: NetworkManager,
     pub local_data: LocalState,
     pending_events: (flume::Sender<AppEvent>, flume::Receiver<AppEvent>),
+    pending_requests: (flume::Sender<ActionRequest>, flume::Receiver<ActionRequest>),
 }
 
 impl AppState {
     pub fn pending_app_events(&self) -> Vec<AppEvent> {
         self.pending_events.1.drain().collect()
     }
+
+    pub fn switch_cloud(&self, id: [u8; 32]) {
+        self.pending_requests
+            .0
+            .send(ActionRequest::SwitchCloud(id))
+            .expect("failed to send app request");
+    }
+
+    pub fn reload_clouds(&self) {
+        self.pending_requests
+            .0
+            .send(ActionRequest::LoadClouds)
+            .expect("failed to send app request");
+    }
+
+    pub fn pending_app_requests(&self) -> Vec<ActionRequest> {
+        self.pending_requests.1.drain().collect()
+    }
 }
 
 pub enum AppEvent {
     ActiveAppletChanged,
+    ActiveCloudChanged,
+}
+
+pub enum ActionRequest {
+    LoadClouds,
+    // the id to switch to
+    SwitchCloud([u8; 32]),
 }
 
 pub struct App {
@@ -40,6 +66,7 @@ impl App {
             network_manager: NetworkManager::new(DEFAULT_SERVER_URL),
             local_data: LocalState::new().unwrap(),
             pending_events: flume::unbounded(),
+            pending_requests: flume::unbounded(),
         };
 
         let mut applets: IndexMap<String, _> = IndexMap::new();
@@ -138,6 +165,22 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let render_start = Instant::now();
 
+        let pending_events = self.state.pending_events.1.drain().collect();
+        for applet in self.applets.values_mut() {
+            applet
+                .handle_app_events(&pending_events, &self.state)
+                .expect(&format!("applet {} failed to handle events", applet.name()));
+        }
+        // we resend here so the `update` function in the active applet can access these. The
+        // channel will be cleared at the end of this function regardless.
+        for event in pending_events {
+            self.state
+                .pending_events
+                .0
+                .send(event)
+                .expect("failed to resend event");
+        }
+
         self.handle_keyboard_input(ctx);
         self.show_framerate_window(ctx);
 
@@ -187,5 +230,23 @@ impl eframe::App for App {
         }
         self.last_render_time = Instant::now().duration_since(render_start);
         self.state.pending_events.1.drain();
+        for r in self.state.pending_app_requests() {
+            match r {
+                ActionRequest::LoadClouds => {
+                    self.state
+                        .local_data
+                        .load_clouds()
+                        .expect("failed to load clouds");
+                }
+                ActionRequest::SwitchCloud(cloud_id) => {
+                    self.state.local_data.set_active_cloud(cloud_id);
+                    self.state
+                        .pending_events
+                        .0
+                        .send(AppEvent::ActiveCloudChanged)
+                        .expect("failed to send ActiveCloudChanged app event");
+                }
+            }
+        }
     }
 }

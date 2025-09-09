@@ -19,7 +19,7 @@ impl Applet for SettingsApplet {
                 ui.label("Not connected!");
             }
             ui.separator();
-            if let Some(path) = &state.local_data.local_data_path {
+            if let Some(path) = &state.local_data.local_data_dir {
                 ui.label(format!("Local data path: {:?}", path));
             } else {
                 ui.label("Local data path: None (in memory only)");

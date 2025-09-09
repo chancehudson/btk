@@ -12,7 +12,7 @@ pub use notes::NotesApplet;
 pub use settings::SettingsApplet;
 pub use tasks::TasksApplet;
 
-use crate::app::AppState;
+use crate::app::{AppEvent, AppState};
 
 pub struct DefaultApplet;
 impl Applet for DefaultApplet {}
@@ -24,6 +24,10 @@ pub trait Applet {
 
     fn name(&self) -> &str {
         "unimplemented"
+    }
+
+    fn handle_app_events(&mut self, _events: &Vec<AppEvent>, state: &AppState) -> Result<()> {
+        Ok(())
     }
 
     fn render(&mut self, ctx: &egui::Context, _state: &AppState) {
