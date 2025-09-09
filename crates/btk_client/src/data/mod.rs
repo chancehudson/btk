@@ -5,6 +5,8 @@ use std::path::PathBuf;
 use anondb::Bytes;
 use anondb::Journal;
 use anyhow::Result;
+use ml_dsa::KeyGen;
+use ml_dsa::MlDsa87;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -23,23 +25,36 @@ const CLOUDS_TABLE: &str = "clouds_by_name";
 /// Meta info about an encrypted cloud.
 #[derive(Serialize, Deserialize)]
 pub struct CloudMetadata {
-    /// Public key that may mutate the cloud.
+    /// Public key that identifies the cloud.
     public_key: Vec<u8>,
+    /// Private key that may mutate the cloud.
+    private_key: [u8; 32],
     /// Latest known mutation index.
     latest_known_index: u64,
-    /// whether the cloud may be mutated
-    is_finalized: bool,
+}
+
+impl CloudMetadata {
+    pub fn new() -> Self {
+        let private_key: [u8; 32] = rand::random();
+        let signer = MlDsa87::key_gen_internal(&private_key.into());
+        Self {
+            private_key,
+            public_key: signer.verifying_key().encode().to_vec(),
+            latest_known_index: 0,
+        }
+    }
 }
 
 impl LocalState {
     /// Retrieve all the encrypted clouds that are known to the client.
     pub fn list_clouds(&self) -> Result<Vec<CloudMetadata>> {
-        Ok(self
+        let clouds = self
             .db
             .find_many::<Bytes, CloudMetadata, _>(CLOUDS_TABLE, |_, _| true)?
             .into_iter()
             .map(|(_k, v)| v)
-            .collect::<Vec<_>>())
+            .collect::<Vec<_>>();
+        Ok(clouds)
     }
 
     #[cfg(not(target_arch = "wasm32"))]

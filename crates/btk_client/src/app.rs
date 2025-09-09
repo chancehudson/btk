@@ -12,6 +12,17 @@ use crate::network::NetworkManager;
 pub struct AppState {
     pub network_manager: NetworkManager,
     pub local_data: LocalState,
+    pending_events: (flume::Sender<AppEvent>, flume::Receiver<AppEvent>),
+}
+
+impl AppState {
+    pub fn pending_app_events(&self) -> Vec<AppEvent> {
+        self.pending_events.1.drain().collect()
+    }
+}
+
+pub enum AppEvent {
+    ActiveAppletChanged,
 }
 
 pub struct App {
@@ -28,6 +39,7 @@ impl App {
         let state = AppState {
             network_manager: NetworkManager::new(DEFAULT_SERVER_URL),
             local_data: LocalState::new().unwrap(),
+            pending_events: flume::unbounded(),
         };
 
         let mut applets: IndexMap<String, _> = IndexMap::new();
@@ -59,6 +71,15 @@ impl App {
 }
 
 impl App {
+    fn change_applet(&mut self, next_applet: String) {
+        self.active_applet = next_applet;
+        self.state
+            .pending_events
+            .0
+            .send(AppEvent::ActiveAppletChanged)
+            .expect("failed to send app event");
+    }
+
     fn handle_keyboard_input(&mut self, ctx: &egui::Context) {
         // Use CMD+num_key to switch to an applet
         let number_keys = [
@@ -82,7 +103,7 @@ impl App {
                     .applets
                     .get_index(index)
                     .expect("logical mismatch between applets len and index");
-                self.active_applet = applet_name.into();
+                self.change_applet(applet_name.clone());
             }
         }
     }
@@ -115,19 +136,6 @@ impl eframe::App for App {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // egui_taffy stuff
-        // Enable multipass rendering upon request without drawing to screen
-        ctx.options_mut(|options| {
-            options.max_passes = std::num::NonZeroUsize::new(3).unwrap();
-        });
-
-        // Disable text wrapping
-        //
-        // egui text layouting tries to utilize minimal width possible
-        ctx.style_mut(|style| {
-            style.wrap_mode = Some(egui::TextWrapMode::Extend);
-        });
-
         let render_start = Instant::now();
 
         self.handle_keyboard_input(ctx);
@@ -143,8 +151,17 @@ impl eframe::App for App {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.columns(2, |columns| {
                 columns[0].horizontal(|ui| {
+                    let mut next_applet_maybe: Option<String> = None;
                     for name in self.applets.keys() {
-                        ui.selectable_value(&mut self.active_applet, name.to_string(), name);
+                        if ui
+                            .selectable_value(&mut self.active_applet, name.to_string(), name)
+                            .changed()
+                        {
+                            next_applet_maybe = Some(self.active_applet.clone());
+                        };
+                    }
+                    if let Some(next_applet) = next_applet_maybe {
+                        self.change_applet(next_applet);
                     }
                 });
                 columns[1].with_layout(egui::Layout::right_to_left(egui::Align::RIGHT), |ui| {
@@ -169,5 +186,6 @@ impl eframe::App for App {
                 });
         }
         self.last_render_time = Instant::now().duration_since(render_start);
+        self.state.pending_events.1.drain();
     }
 }

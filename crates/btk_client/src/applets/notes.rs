@@ -2,6 +2,7 @@ use anondb::Journal;
 use anyhow::Result;
 use egui::Color32;
 use egui::Frame;
+use egui::InputState;
 use egui::ScrollArea;
 use egui::TextEdit;
 use egui::TextStyle;
@@ -11,6 +12,7 @@ use egui_taffy::TuiBuilderLogic;
 use egui_taffy::taffy::prelude::*;
 
 use super::Applet;
+use crate::app::AppEvent;
 use crate::app::AppState;
 
 #[derive(Default, PartialEq)]
@@ -20,7 +22,12 @@ enum LastScrolled {
     Rendered,
 }
 
+/// Table in anondb reserved for notes applet
 const NOTES_TABLE_NAME: &str = "notes";
+
+/// Inputs we sometimes want to explicitly focus
+const INPUT_NOTE_NAME: &str = "name_text_input";
+const INPUT_NOTE_SOURCE: &str = "source_multiline_input";
 
 #[derive(Default)]
 pub struct NotesApplet {
@@ -62,6 +69,15 @@ impl NotesApplet {
         Ok(())
     }
 
+    fn reset_note_state(&mut self) {
+        if self.active_note_unsaved != self.active_note {
+            println!("WARNING: unsaved changes");
+        }
+        self.active_note = String::default();
+        self.active_note_unsaved = String::default();
+        self.active_note_name = String::default();
+    }
+
     fn open(&mut self, note_name: String, state: &AppState) -> Result<()> {
         if self.active_note_unsaved != self.active_note {
             println!("WARNING: unsaved changes");
@@ -71,19 +87,16 @@ impl NotesApplet {
         // load the diffs and apply them to construct the latest state
         let mut active_note = String::default();
         let tx = state.local_data.db.begin_read()?;
-        if let Ok(table) = tx.open_table(Journal::table_definition(&Self::table_name(&note_name))) {
-            let mut range = table.range::<anondb::Bytes>(..)?;
-            while let Some(entry) = range.next() {
-                let (_index_bytes, bytes) = entry?;
-                // let index: u64 = index_bytes.value().into();
-                // println!("{}", index);
-                let bytes = bytes.value();
-                let diff = diffy::Patch::from_str((&bytes).into())?;
-                // println!("{diff}");
-                active_note = diffy::apply(&active_note, &diff)?;
-            }
-        } else {
-            println!("failed to open note specific table");
+        let table = tx.open_table(Journal::table_definition(&Self::table_name(&note_name)))?;
+        let mut range = table.range::<anondb::Bytes>(..)?;
+        while let Some(entry) = range.next() {
+            let (_index_bytes, bytes) = entry?;
+            // let index: u64 = index_bytes.value().into();
+            // println!("{}", index);
+            let bytes = bytes.value();
+            let diff = diffy::Patch::from_str((&bytes).into())?;
+            // println!("{diff}");
+            active_note = diffy::apply(&active_note, &diff)?;
         }
 
         self.active_note = active_note.clone();
@@ -96,9 +109,6 @@ impl NotesApplet {
     fn save(&mut self, state: &AppState) -> Result<()> {
         if self.active_note_name.is_empty() {
             println!("WARNING: attempting to save note without a name");
-            return Ok(());
-        }
-        if self.active_note == self.active_note_unsaved {
             return Ok(());
         }
         // We'll save each note to its own table. Each entry in the table represents a diff from
@@ -124,6 +134,68 @@ impl NotesApplet {
         self.reload_note_names(state)?;
 
         Ok(())
+    }
+
+    fn render_side_list(&mut self, ctx: &egui::Context, state: &AppState) {
+        egui::SidePanel::left("notes_list")
+            .resizable(true)
+            .show(ctx, |ui| {
+                egui_taffy::tui(ui, "notes_list_inner")
+                    .reserve_available_space()
+                    .style(Style {
+                        display: Display::Flex,
+                        flex_direction: FlexDirection::Column,
+                        align_items: Some(AlignItems::Stretch),
+                        min_size: Size {
+                            width: percent(1.0),
+                            height: length(0.0),
+                        },
+                        ..Default::default()
+                    })
+                    .show(|tui| {
+                        tui.style(Style {
+                            padding: length(4.0),
+                            margin: length(2.0),
+                            flex_direction: FlexDirection::Row,
+                            align_items: Some(AlignItems::Center),
+                            justify_content: Some(JustifyContent::SpaceBetween),
+                            ..Default::default()
+                        })
+                        .add(|tui| {
+                            tui.heading("Saved notes");
+                            tui.style(Style {
+                                padding: length(4.0),
+                                margin: length(2.0),
+                                ..Default::default()
+                            })
+                            .ui(|ui| {
+                                if ui.button("+").clicked() {
+                                    self.reset_note_state();
+                                    ctx.memory_mut(|mem| {
+                                        mem.request_focus(INPUT_NOTE_NAME.into());
+                                    });
+                                }
+                            });
+                        });
+                        for name in self.note_names.clone() {
+                            if tui
+                                .style(Style {
+                                    padding: length(4.0),
+                                    margin: length(2.0),
+                                    ..Default::default()
+                                })
+                                .selectable(name == self.active_note_name, |tui| {
+                                    tui.label(&name);
+                                })
+                                .clicked()
+                            {
+                                ctx.memory_mut(|mem| mem.request_focus(INPUT_NOTE_SOURCE.into()));
+                                self.open(name.clone(), state)
+                                    .expect(&format!("failed to open note: {name}"));
+                            }
+                        }
+                    });
+            });
     }
 }
 
@@ -153,54 +225,58 @@ impl Applet for NotesApplet {
         //     ));
         // });
 
-        // used to move focus to the editor when a file is opened
-        let mut opened_this_frame = false;
+        for event in state.pending_app_events() {
+            match event {
+                AppEvent::ActiveAppletChanged => {
+                    if self.active_note_name.is_empty() {
+                        ctx.memory_mut(|mem| mem.request_focus(INPUT_NOTE_NAME.into()));
+                    } else {
+                        ctx.memory_mut(|mem| mem.request_focus(INPUT_NOTE_SOURCE.into()));
+                    }
+                }
+            }
+        }
 
-        egui::SidePanel::left("notes_list")
-            .resizable(true)
-            .show(ctx, |ui| {
-                egui_taffy::tui(ui, ui.id().with("notes_list_inner"))
-                    .reserve_available_space()
-                    .style(Style {
-                        display: Display::Flex,
-                        flex_direction: FlexDirection::Column,
-                        align_items: Some(AlignItems::Stretch),
-                        ..Default::default()
-                    })
-                    .show(|tui| {
-                        tui.heading("Saved notes");
-                        for name in self.note_names.clone() {
-                            if tui
-                                .style(Style {
-                                    padding: length(4.0),
-                                    margin: length(2.0),
-                                    ..Default::default()
-                                })
-                                .selectable(name == self.active_note_name, |tui| {
-                                    tui.label(&name);
-                                })
-                                .clicked()
-                            {
-                                opened_this_frame = true;
-                                self.open(name.clone(), state)
-                                    .expect(&format!("failed to open note: {name}"));
-                            }
-                        }
-                    });
-            });
+        self.render_side_list(ctx, state);
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal_top(|ui| {
                 let response = egui::TextEdit::singleline(&mut self.active_note_name)
-                    .hint_text("note_name")
+                    .id(INPUT_NOTE_NAME.into())
+                    .hint_text("start typing a name like note.md")
                     .show(ui)
                     .response;
                 if response.changed() {
                     self.active_note_name = self.active_note_name.trim().to_string();
-                    self.active_note = String::default();
+                    if let Err(_e) = self.open(self.active_note_name.clone(), state) {
+                        self.active_note = String::default();
+                        self.active_note_unsaved = String::default();
+                    }
                 }
-                if ui.button("save").clicked() {
-                    self.save(state).expect("failed to save");
+                if response.has_focus()
+                    && self.active_note.is_empty()
+                    && self.active_note_name.len() > 3
+                {
+                    response.show_tooltip_ui(|ui| {
+                        ui.label("Press enter to create");
+                    });
+                }
+                if response.lost_focus()
+                    && ui.input(|i| i.key_pressed(egui::Key::Enter))
+                    && self.active_note_name.len() > 0
+                {
+                    ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+                    // TODO: first check if we're overwriting an existing note
+                    match self.save(state) {
+                        Ok(()) => {
+                            ctx.memory_mut(|mem| {
+                                mem.request_focus(INPUT_NOTE_SOURCE.into());
+                            });
+                        }
+                        Err(e) => {
+                            println!("Error saving new note! {:?}", e);
+                        }
+                    }
                 }
                 // if ui
                 //     .selectable_label(self.is_showing_history, "history")
@@ -209,6 +285,9 @@ impl Applet for NotesApplet {
                 //     self.is_showing_history = !self.is_showing_history;
                 // }
                 if self.active_note != self.active_note_unsaved {
+                    if ui.button("Save").clicked() {
+                        self.save(state).expect("failed to save");
+                    }
                     // we have unsaved changes
                     ui.colored_label(Color32::RED, "unsaved changes!");
                 }
@@ -235,18 +314,15 @@ impl Applet for NotesApplet {
                                 .id_salt("source_scroll_area")
                                 .show(ui, |ui| {
                                     ui.set_height(available_height);
-                                    let text_edit =
-                                        TextEdit::multiline(&mut self.active_note_unsaved)
-                                            .frame(false)
-                                            .hint_text("Your markdown text here...")
-                                            .clip_text(true)
-                                            // subtract one to avoid scroll bars on an empty text
-                                            // editor :roll_eyes:
-                                            .desired_rows(desired_rows.max(1) - 1);
-                                    let added = ui.add(text_edit);
-                                    if opened_this_frame {
-                                        added.request_focus();
-                                    }
+                                    TextEdit::multiline(&mut self.active_note_unsaved)
+                                        .id(INPUT_NOTE_SOURCE.into())
+                                        .frame(false)
+                                        .hint_text("Your markdown text here...")
+                                        .clip_text(true)
+                                        // subtract one to avoid scroll bars on an empty text
+                                        // editor :roll_eyes:
+                                        .desired_rows(desired_rows.max(1) - 1)
+                                        .show(ui);
                                 });
 
                             self.last_source_height =

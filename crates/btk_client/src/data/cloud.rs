@@ -17,7 +17,7 @@ use ml_dsa::signature::Signer;
 
 /// A trustlessly replicated Anondb instance with simple conflict resolution for realtime
 /// collaboration among keyholders.
-pub struct Cloud {
+pub struct RemoteCloud {
     url: String,
     connection_maybe: Option<NetworkConnection>,
     local_db: Journal,
@@ -27,7 +27,7 @@ pub struct Cloud {
     pubkey_hash: [u8; 32],
 }
 
-impl Cloud {
+impl RemoteCloud {
     /// Accept an anondb transaction and create a trustless representation.
     fn encrypt_tx(&self, index: u64, transaction: Vec<TransactionOperation>) -> Result<Mutation> {
         let signer = MlDsa87::key_gen_internal(&self.prvkey.into());
