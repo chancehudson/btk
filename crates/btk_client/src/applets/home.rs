@@ -1,3 +1,6 @@
+/// This widget is superseded by the clouds menu in app.rs
+///
+///
 use std::collections::HashSet;
 
 use egui_taffy::Tui;
@@ -73,12 +76,6 @@ impl Applet for HomeApplet {
     }
 
     fn render(&mut self, ctx: &egui::Context, state: &AppState) {
-        ctx.options_mut(|options| {
-            options.max_passes = std::num::NonZeroUsize::new(2).unwrap();
-        });
-        ctx.style_mut(|style| {
-            style.wrap_mode = Some(egui::TextWrapMode::Extend);
-        });
         self.render_footer(ctx, state);
         egui::CentralPanel::default().show(ctx, |ui| {
             egui_taffy::tui(ui, "home")
