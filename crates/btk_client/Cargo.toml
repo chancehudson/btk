@@ -17,6 +17,8 @@ chacha20 = { workspace = true }
 
 diffy = "0"
 
+names = "0.14.0"
+hex = "0.4.0"
 directories = "6"
 eframe = "0.32.0"
 egui = "0.32.0"

@@ -10,13 +10,42 @@ use chacha20::cipher::StreamCipher;
 use ml_dsa::KeyGen;
 use ml_dsa::MlDsa87;
 use ml_dsa::signature::SignerMut;
+use serde::Deserialize;
+use serde::Serialize;
+use web_time::SystemTime;
 
 use network_common::Mutation;
 
 use super::remote_cloud::RemoteCloud;
 
+const CLOUD_TABLE: &str = "_______cloud_data";
+const METADATA_KEY: &str = "metadata";
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct CloudMetadata {
+    pub created_at: u64,
+    pub name: String,
+    pub description: String,
+}
+
+impl Default for CloudMetadata {
+    fn default() -> Self {
+        let mut generator = names::Generator::default();
+        Self {
+            created_at: SystemTime::now()
+                .duration_since(web_time::UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_secs(),
+            name: generator.next().unwrap_or_default(),
+            description: String::default(),
+        }
+    }
+}
+
 /// Meta info about an encrypted cloud.
+#[derive(Clone)]
 pub struct Cloud {
+    pub metadata: CloudMetadata,
     /// Public key that identifies the cloud.
     public_key: Vec<u8>,
     /// Private key that may mutate the cloud.
@@ -44,6 +73,13 @@ impl Cloud {
             .collect::<String>()
     }
 
+    pub fn set_metadata(&mut self, metadata: CloudMetadata) -> Result<()> {
+        self.db
+            .insert(CLOUD_TABLE, &METADATA_KEY.to_string(), &metadata)?;
+        self.metadata = metadata;
+        Ok(())
+    }
+
     pub fn new(data_dir_maybe: Option<PathBuf>) -> Result<Self> {
         Self::from_key(rand::random(), data_dir_maybe)
     }
@@ -53,18 +89,27 @@ impl Cloud {
         let public_key = signer.verifying_key().encode().to_vec();
         let id: [u8; 32] = blake3::hash(&public_key).into();
         let hex_string = id.iter().map(|b| format!("{:02x}", b)).collect::<String>() + ".redb";
+        let db = if let Some(data_dir) = data_dir_maybe {
+            Journal::at_path(&data_dir.join(hex_string))?
+        } else {
+            Journal::in_memory(None)?
+        };
+        let metadata = if let Some(metadata) = db.get(CLOUD_TABLE, &METADATA_KEY.to_string())? {
+            metadata
+        } else {
+            let metadata = CloudMetadata::default();
+            db.insert(CLOUD_TABLE, &METADATA_KEY.to_string(), &metadata)?;
+            metadata
+        };
 
         Ok(Self {
             id,
+            db,
             private_key,
             public_key,
             latest_known_index: 0,
-            db: if let Some(data_dir) = data_dir_maybe {
-                Journal::at_path(&data_dir.join(hex_string))?
-            } else {
-                Journal::in_memory(None)?
-            },
             remote: None,
+            metadata,
         })
     }
 

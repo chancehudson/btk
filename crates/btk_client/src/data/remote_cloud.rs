@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use network_common::*;
 
@@ -5,9 +7,10 @@ use crate::network::NetworkConnection;
 
 /// A trustlessly replicated Anondb instance with simple conflict resolution for realtime
 /// collaboration among keyholders.
+#[derive(Clone)]
 pub struct RemoteCloud {
     url: String,
-    connection_maybe: Option<NetworkConnection>,
+    connection_maybe: Option<Arc<NetworkConnection>>,
 }
 
 impl RemoteCloud {

@@ -1,17 +1,25 @@
 mod cloud;
 mod remote_cloud;
 
+pub use cloud::Cloud;
+pub use cloud::CloudMetadata;
+pub use remote_cloud::RemoteCloud;
+
 use std::collections::HashMap;
 use std::mem;
 use std::path::PathBuf;
 
 use anondb::Journal;
 use anyhow::Result;
-use cloud::Cloud;
 
 /// We're going to need a few different databases.
 
+/// Misc data used by `LocalState` to maintain and operate `Cloud` instances.
+/// Stored locally only.
 const CLOUD_KEYS_TABLE: &str = "_______known_keys";
+
+/// Key for the id of the last cloud that was active.
+const ACTIVE_CLOUD_KEY: [u8; 32] = [0; 32];
 
 /// Everything we need to interface with an encrypted cloud.
 /// This includes local first mutations, handling differences with the remote cloud, persisting and
@@ -22,23 +30,39 @@ pub struct LocalState {
     /// Path where persistent application data may be stored.
     pub local_data_dir: Option<PathBuf>,
     pub clouds: HashMap<[u8; 32], Cloud>,
+    pub sorted_clouds: Vec<Cloud>,
     pub active_cloud_id: Option<[u8; 32]>,
 }
 
 impl LocalState {
-    /// Retrieve all the encrypted clouds that we know how to decrypt.
-    fn cloud_keys(&self) -> Result<Vec<[u8; 32]>> {
-        Ok(self
-            .db
-            .find_many::<[u8; 32], [u8; 32], _>(CLOUD_KEYS_TABLE, |_, _| true)?
-            .into_iter()
-            .map(|(_k, v)| v)
-            .collect())
+    pub fn new() -> Result<Self> {
+        Ok(Self {
+            db: if let Some(data_dir) = Self::local_data_dir()? {
+                redb::Database::create(data_dir.join("local_data.redb"))?.into()
+            } else {
+                Journal::in_memory(None)?
+            },
+            local_data_dir: Self::local_data_dir()?,
+            clouds: HashMap::default(),
+            active_cloud_id: None,
+            sorted_clouds: Vec::default(),
+        })
     }
 
-    pub fn load_clouds(&mut self) -> Result<Vec<&Cloud>> {
+    /// Initialize `LocalState` using `self.db`.
+    pub fn init(&mut self) -> Result<()> {
+        self.load_clouds()?;
+
+        self.active_cloud_id = self.db.get(CLOUD_KEYS_TABLE, &ACTIVE_CLOUD_KEY)?;
+
+        Ok(())
+    }
+
+    pub fn load_clouds(&mut self) -> Result<&Vec<Cloud>> {
         mem::take(&mut self.clouds);
+        mem::take(&mut self.sorted_clouds);
         let data_dir_maybe = Self::local_data_dir()?;
+
         for cloud in self
             .cloud_keys()?
             .into_iter()
@@ -47,7 +71,10 @@ impl LocalState {
         {
             self.clouds.insert(*cloud.id(), cloud);
         }
-        Ok(self.clouds.values().into_iter().collect())
+        self.sorted_clouds = self.clouds.values().into_iter().cloned().collect();
+        self.sorted_clouds
+            .sort_by(|first, second| first.metadata.created_at.cmp(&second.metadata.created_at));
+        Ok(&self.sorted_clouds)
     }
 
     /// Create a new encrypted cloud. This is a local keypair keyed
@@ -70,8 +97,10 @@ impl LocalState {
         Ok(cloud)
     }
 
-    pub fn set_active_cloud(&mut self, id: [u8; 32]) {
+    pub fn set_active_cloud(&mut self, id: [u8; 32]) -> Result<()> {
+        self.db.insert(CLOUD_KEYS_TABLE, &ACTIVE_CLOUD_KEY, &id)?;
         self.active_cloud_id = Some(id);
+        Ok(())
     }
 
     pub fn active_cloud(&self) -> Result<&Cloud> {
@@ -84,25 +113,14 @@ impl LocalState {
         }
     }
 
-    pub fn new() -> Result<Self> {
-        let mut out = if let Some(data_dir) = Self::local_data_dir()? {
-            Self {
-                db: redb::Database::create(data_dir.join("local_data.redb"))?.into(),
-                local_data_dir: Some(data_dir.into()),
-                clouds: HashMap::default(),
-                active_cloud_id: None,
-            }
-        } else {
-            // unable to find a path for persistence, run in memory
-            Self {
-                db: Journal::in_memory(None)?,
-                local_data_dir: None,
-                clouds: HashMap::default(),
-                active_cloud_id: None,
-            }
-        };
-        out.load_clouds()?;
-        Ok(out)
+    /// Retrieve all the encrypted clouds that we know how to decrypt.
+    fn cloud_keys(&self) -> Result<Vec<[u8; 32]>> {
+        Ok(self
+            .db
+            .find_many::<[u8; 32], [u8; 32], _>(CLOUD_KEYS_TABLE, |_, _| true)?
+            .into_iter()
+            .map(|(_k, v)| v)
+            .collect())
     }
 
     #[cfg(not(target_arch = "wasm32"))]

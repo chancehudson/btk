@@ -1,11 +1,68 @@
-use egui_taffy::TuiBuilderLogic;
+use std::collections::HashSet;
+
 use egui_taffy::taffy::prelude::*;
+use egui_taffy::{Tui, TuiBuilderLogic};
 
 use super::Applet;
 use crate::app::AppState;
+use crate::data::*;
 
 #[derive(Default)]
-pub struct HomeApplet {}
+pub struct HomeApplet {
+    showing_private_key: HashSet<[u8; 32]>,
+}
+
+impl HomeApplet {
+    fn render_cloud_cell(&mut self, cloud: &Cloud, tui: &mut Tui, state: &AppState) {
+        tui.style(Style {
+            flex_direction: FlexDirection::Row,
+            justify_content: Some(JustifyContent::SpaceAround),
+            align_items: Some(AlignItems::FlexStart),
+            min_size: Size {
+                width: percent(1.0),
+                height: length(0.0),
+            },
+            ..Default::default()
+        })
+        .add(|tui| {
+            tui.style(Style {
+                flex_direction: FlexDirection::Column,
+                ..Default::default()
+            })
+            .add_with_border(|tui| {
+                tui.heading(&format!("{}", cloud.metadata.name));
+                tui.label(&format!("created at: {}", cloud.metadata.created_at));
+                tui.label(&format!("cloud id: {}", cloud.id_hex()));
+                if self.showing_private_key.contains(cloud.id()) {
+                    tui.label(&format!("cloud key: {}", hex::encode(cloud.private_key())));
+                } else {
+                    tui.ui(|ui| {
+                        if ui.button("show private key").clicked() {
+                            self.showing_private_key.insert(*cloud.id());
+                        }
+                    });
+                }
+            });
+            tui.style(Style {
+                flex_direction: FlexDirection::Column,
+                ..Default::default()
+            })
+            .add(|tui| {
+                if let Some(cloud_id) = state.local_data.active_cloud_id
+                    && cloud.id() == &cloud_id
+                {
+                    tui.label("active!");
+                } else {
+                    tui.ui(|ui| {
+                        if ui.button("Switch").clicked() {
+                            state.switch_cloud(*cloud.id());
+                        }
+                    });
+                }
+            });
+        });
+    }
+}
 
 impl Applet for HomeApplet {
     fn name(&self) -> &str {
@@ -20,6 +77,7 @@ impl Applet for HomeApplet {
                 .style(Style {
                     display: Display::Flex,
                     flex_direction: FlexDirection::Column,
+                    padding: length(40.0),
                     min_size: Size {
                         width: percent(1.0),
                         height: length(0.0),
@@ -50,31 +108,8 @@ impl Applet for HomeApplet {
                         });
                     });
                     tui.separator();
-                    for cloud in state.local_data.clouds.values() {
-                        tui.style(Style {
-                            flex_direction: FlexDirection::Row,
-                            flex_wrap: FlexWrap::Wrap,
-                            justify_content: Some(JustifyContent::SpaceAround),
-                            min_size: Size {
-                                width: percent(1.0),
-                                height: length(0.0),
-                            },
-                            ..Default::default()
-                        })
-                        .add(|tui| {
-                            tui.label(&format!("cloud id: {:?}", cloud.id_hex()));
-                            tui.ui(|ui| {
-                                if let Some(cloud_id) = state.local_data.active_cloud_id
-                                    && cloud.id() == &cloud_id
-                                {
-                                    ui.label("active!");
-                                } else {
-                                    if ui.button("Activate").clicked() {
-                                        state.switch_cloud(*cloud.id());
-                                    }
-                                }
-                            });
-                        });
+                    for cloud in &state.local_data.sorted_clouds {
+                        self.render_cloud_cell(cloud, tui, state);
                     }
                 });
         });
@@ -82,7 +117,7 @@ impl Applet for HomeApplet {
 }
 
 impl HomeApplet {
-    fn render_footer(&mut self, ctx: &egui::Context, state: &AppState) {
+    fn render_footer(&mut self, ctx: &egui::Context, _state: &AppState) {
         egui::TopBottomPanel::bottom("home_footer").show(ctx, |ui| {
             ctx.style_mut(|style| {
                 style.wrap_mode = Some(egui::TextWrapMode::Extend);

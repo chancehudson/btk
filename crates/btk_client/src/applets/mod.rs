@@ -26,7 +26,7 @@ pub trait Applet {
         "unimplemented"
     }
 
-    fn handle_app_events(&mut self, _events: &Vec<AppEvent>, state: &AppState) -> Result<()> {
+    fn handle_app_events(&mut self, _events: &Vec<AppEvent>, _state: &AppState) -> Result<()> {
         Ok(())
     }
 

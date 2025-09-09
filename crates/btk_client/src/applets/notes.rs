@@ -34,7 +34,7 @@ pub struct NotesApplet {
     active_note_unsaved: String,
     active_note: String,
 
-    is_showing_history: bool,
+    _is_showing_history: bool,
 
     note_names: Vec<String>,
 
@@ -200,10 +200,6 @@ impl NotesApplet {
 }
 
 impl Applet for NotesApplet {
-    fn init(&mut self, state: &AppState) -> Result<()> {
-        Ok(())
-    }
-
     fn name(&self) -> &str {
         "Notes"
     }

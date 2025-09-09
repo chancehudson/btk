@@ -62,12 +62,14 @@ pub struct App {
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Result<Self> {
         egui_extras::install_image_loaders(&cc.egui_ctx);
-        let state = AppState {
+        let mut state = AppState {
             network_manager: NetworkManager::new(DEFAULT_SERVER_URL),
-            local_data: LocalState::new().unwrap(),
+            local_data: LocalState::new()?,
             pending_events: flume::unbounded(),
             pending_requests: flume::unbounded(),
         };
+
+        state.local_data.init()?;
 
         let mut applets: IndexMap<String, _> = IndexMap::new();
 
@@ -239,7 +241,10 @@ impl eframe::App for App {
                         .expect("failed to load clouds");
                 }
                 ActionRequest::SwitchCloud(cloud_id) => {
-                    self.state.local_data.set_active_cloud(cloud_id);
+                    self.state
+                        .local_data
+                        .set_active_cloud(cloud_id)
+                        .expect("failed to set active cloud");
                     self.state
                         .pending_events
                         .0
