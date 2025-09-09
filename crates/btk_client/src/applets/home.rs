@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use egui_taffy::taffy::prelude::*;
+use egui_taffy::taffy::{Overflow, Point, prelude::*};
 use egui_taffy::{Tui, TuiBuilderLogic};
 
 use super::Applet;
@@ -20,7 +20,7 @@ impl HomeApplet {
             align_items: Some(AlignItems::FlexStart),
             min_size: Size {
                 width: percent(1.0),
-                height: length(0.0),
+                height: length(40.0),
             },
             ..Default::default()
         })
@@ -70,6 +70,12 @@ impl Applet for HomeApplet {
     }
 
     fn render(&mut self, ctx: &egui::Context, state: &AppState) {
+        ctx.options_mut(|options| {
+            options.max_passes = std::num::NonZeroUsize::new(2).unwrap();
+        });
+        ctx.style_mut(|style| {
+            style.wrap_mode = Some(egui::TextWrapMode::Extend);
+        });
         self.render_footer(ctx, state);
         egui::CentralPanel::default().show(ctx, |ui| {
             egui_taffy::tui(ui, "home")
@@ -77,40 +83,53 @@ impl Applet for HomeApplet {
                 .style(Style {
                     display: Display::Flex,
                     flex_direction: FlexDirection::Column,
-                    padding: length(40.0),
                     min_size: Size {
                         width: percent(1.0),
                         height: length(0.0),
+                    },
+                    max_size: Size {
+                        width: percent(1.0),
+                        height: percent(1.0),
+                    },
+                    overflow: Point {
+                        x: Overflow::default(),
+                        y: Overflow::Scroll,
                     },
                     ..Default::default()
                 })
                 .show(|tui| {
                     tui.style(Style {
-                        display: Display::Flex,
-                        flex_direction: FlexDirection::Row,
-                        justify_content: Some(JustifyContent::SpaceAround),
-                        min_size: Size {
-                            width: percent(1.0),
-                            height: length(0.0),
-                        },
+                        flex_direction: FlexDirection::Column,
                         ..Default::default()
                     })
                     .add(|tui| {
-                        tui.heading("Your encrypted clouds");
-                        tui.ui(|ui| {
-                            if ui.button("+").clicked() {
-                                state
-                                    .local_data
-                                    .create_cloud()
-                                    .expect("failed to create cloud");
-                                state.reload_clouds();
-                            }
+                        tui.style(Style {
+                            display: Display::Flex,
+                            flex_direction: FlexDirection::Row,
+                            justify_content: Some(JustifyContent::SpaceAround),
+                            min_size: Size {
+                                width: percent(1.0),
+                                height: length(0.0),
+                            },
+                            ..Default::default()
+                        })
+                        .add(|tui| {
+                            tui.heading("Your encrypted clouds");
+                            tui.ui(|ui| {
+                                if ui.button("+").clicked() {
+                                    state
+                                        .local_data
+                                        .create_cloud()
+                                        .expect("failed to create cloud");
+                                    state.reload_clouds();
+                                }
+                            });
                         });
+                        tui.separator();
+                        for cloud in &state.local_data.sorted_clouds {
+                            self.render_cloud_cell(cloud, tui, state);
+                        }
                     });
-                    tui.separator();
-                    for cloud in &state.local_data.sorted_clouds {
-                        self.render_cloud_cell(cloud, tui, state);
-                    }
                 });
         });
     }
@@ -119,9 +138,6 @@ impl Applet for HomeApplet {
 impl HomeApplet {
     fn render_footer(&mut self, ctx: &egui::Context, _state: &AppState) {
         egui::TopBottomPanel::bottom("home_footer").show(ctx, |ui| {
-            ctx.style_mut(|style| {
-                style.wrap_mode = Some(egui::TextWrapMode::Extend);
-            });
             egui_taffy::tui(ui, "home_footer")
                 .reserve_available_width()
                 .style(Style {

@@ -80,15 +80,36 @@ impl Cloud {
         Ok(())
     }
 
+    pub fn init(&mut self) -> Result<()> {
+        let metadata =
+            if let Some(metadata) = self.db.get(CLOUD_TABLE, &METADATA_KEY.to_string())? {
+                metadata
+            } else {
+                let metadata = CloudMetadata::default();
+                self.db
+                    .insert(CLOUD_TABLE, &METADATA_KEY.to_string(), &metadata)?;
+                metadata
+            };
+        self.metadata = metadata;
+        Ok(())
+    }
+
     pub fn new(data_dir_maybe: Option<PathBuf>) -> Result<Self> {
         Self::from_key(rand::random(), data_dir_maybe)
+    }
+
+    pub fn id_from_key(private_key: [u8; 32]) -> [u8; 32] {
+        let signer = MlDsa87::key_gen_internal(&private_key.into());
+        let public_key = signer.verifying_key().encode().to_vec();
+        let id: [u8; 32] = blake3::hash(&public_key).into();
+        id
     }
 
     pub fn from_key(private_key: [u8; 32], data_dir_maybe: Option<PathBuf>) -> Result<Self> {
         let signer = MlDsa87::key_gen_internal(&private_key.into());
         let public_key = signer.verifying_key().encode().to_vec();
         let id: [u8; 32] = blake3::hash(&public_key).into();
-        let hex_string = id.iter().map(|b| format!("{:02x}", b)).collect::<String>() + ".redb";
+        let hex_string = hex::encode(&id) + ".redb";
         let db = if let Some(data_dir) = data_dir_maybe {
             Journal::at_path(&data_dir.join(hex_string))?
         } else {

@@ -92,8 +92,7 @@ impl App {
                 .0
                 .into(),
             applets,
-            #[cfg(debug_assertions)]
-            show_stats: true,
+            show_stats: cfg!(debug_assertions),
             last_render_time: Duration::default(),
         })
     }

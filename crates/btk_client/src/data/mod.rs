@@ -59,18 +59,21 @@ impl LocalState {
     }
 
     pub fn load_clouds(&mut self) -> Result<&Vec<Cloud>> {
-        mem::take(&mut self.clouds);
-        mem::take(&mut self.sorted_clouds);
         let data_dir_maybe = Self::local_data_dir()?;
 
-        for cloud in self
-            .cloud_keys()?
-            .into_iter()
-            .map(|key| Cloud::from_key(key.into(), data_dir_maybe.clone()))
-            .collect::<Result<Vec<Cloud>>>()?
-        {
-            self.clouds.insert(*cloud.id(), cloud);
+        let mut next_clouds = HashMap::default();
+        for key in self.cloud_keys()? {
+            let cloud_id = Cloud::id_from_key(key.into());
+            if let Some(cloud) = self.clouds.get(&cloud_id) {
+                next_clouds.insert(cloud_id, cloud.clone());
+            } else {
+                next_clouds.insert(
+                    cloud_id,
+                    Cloud::from_key(key.into(), data_dir_maybe.clone())?,
+                );
+            }
         }
+        self.clouds = next_clouds;
         self.sorted_clouds = self.clouds.values().into_iter().cloned().collect();
         self.sorted_clouds
             .sort_by(|first, second| first.metadata.created_at.cmp(&second.metadata.created_at));
