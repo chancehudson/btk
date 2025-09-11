@@ -27,8 +27,8 @@ pub enum Action {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum Response {
-    /// `latest_known_index`
-    Authenticated(u64),
+    /// `latest_known_hash`
+    Authenticated([u8; 32]),
     /// Notify relevant listeners that a new mutation has occurred.
     ///
     /// `latest_known_index, mutation_hash`

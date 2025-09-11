@@ -151,8 +151,20 @@ impl App {
             .default_width(200.0)
             .width_range(150.0..=500.0)
             .show(ctx, |ui| {
-                ui.vertical_centered(|ui| {
-                    ui.heading("Clouds");
+                ui.vertical_centered_justified(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.heading("Clouds");
+                        if ui.button("+").clicked() {
+                            self.state
+                                .local_data
+                                .create_cloud()
+                                .expect("failed to create cloud");
+                            self.state
+                                .local_data
+                                .load_clouds()
+                                .expect("failed to load clouds");
+                        }
+                    });
                 });
 
                 ui.separator();
@@ -183,7 +195,7 @@ impl App {
                         ..Default::default()
                     })
                     .show(|tui| {
-                        for cloud in &self.state.local_data.sorted_clouds {
+                        for (cloud, metadata) in &self.state.local_data.sorted_clouds {
                             tui.style(Style {
                                 flex_direction: FlexDirection::Row,
                                 align_items: Some(AlignItems::Center),
@@ -206,18 +218,13 @@ impl App {
                                                 .active_cloud_id
                                                 .unwrap_or_default(),
                                         |tui| {
-                                            tui.heading(&cloud.metadata.name);
+                                            tui.heading(&metadata.name);
                                         },
                                     )
                                     .clicked()
                                 {
                                     self.state.switch_cloud(*cloud.id());
                                 }
-                                tui.ui(|ui| {
-                                    if ui.button("⚙").clicked() {
-                                        // Settings action
-                                    }
-                                });
                             });
                         }
                     });
@@ -232,11 +239,11 @@ impl eframe::App for App {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        for cloud in self.state.local_data.clouds.values_mut() {
-            cloud
-                .update()
-                .expect(&format!("cloud {} failed to update", cloud.metadata.name));
-        }
+        // for cloud in self.state.local_data.clouds.values_mut() {
+        //     cloud
+        //         .update()
+        //         .expect(&format!("cloud {} failed to update", cloud.metadata.name));
+        // }
 
         let render_start = Instant::now();
 
@@ -315,11 +322,14 @@ impl eframe::App for App {
         for r in self.state.drain_pending_app_requests() {
             match r {
                 ActionRequest::UpdateCloudMetadata(cloud_id, new_metadata) => {
-                    if let Some(cloud) = self.state.local_data.clouds.get_mut(&cloud_id) {
+                    if let Some((cloud, _)) = self.state.local_data.clouds.get(&cloud_id) {
                         cloud
                             .set_metadata(new_metadata)
-                            .expect("failed to update cloud metadat");
-                        self.state.reload_clouds();
+                            .expect("failed to update cloud metadata");
+                        self.state
+                            .local_data
+                            .load_clouds()
+                            .expect("failed to load clouds after metadata update");
                     } else {
                         println!("WARNING: attempting to update metadata for unknown cloud");
                     }

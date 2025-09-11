@@ -196,7 +196,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bincode",
+ "blake3",
  "flume",
+ "hex",
  "redb",
  "rmp",
  "rmp-serde",
@@ -2784,6 +2786,7 @@ dependencies = [
 name = "network_common"
 version = "0.1.0"
 dependencies = [
+ "anondb",
  "anyhow",
  "blake3",
  "ml-dsa",

@@ -8,13 +8,14 @@ use ml_dsa::signature::Verifier;
 use serde::Deserialize;
 use serde::Serialize;
 
+use anondb::Bytes;
+
 /// Public data for a mutation to an encrypted cloud.
 /// Used to ensure consistency among synchronized devices.
 ///
 /// Data is encypted with key H(H(private_key), index, salt), and the encrypted bytes are signed.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Mutation {
-    /// Global counter of mutations
     pub index: u64,
     /// Encrypted mutation/diff/action
     pub data: Vec<u8>,
@@ -36,8 +37,13 @@ pub struct Mutation {
 }
 
 impl Mutation {
-    pub fn hash() -> [u8; 32] {
-        unimplemented!();
+    pub fn hash(&self) -> Result<[u8; 32]> {
+        let mut to_hash = self.clone();
+        // we want to exclude the mutation key from the hash. This value may change without
+        // affecting the contents of the mutation.
+        to_hash.mutation_key = None;
+
+        Ok(blake3::hash(Bytes::encode(&to_hash)?.as_slice()).into())
     }
 
     /// Verify that the public_key_hash is correct. Verify that public_key is correct, if present.

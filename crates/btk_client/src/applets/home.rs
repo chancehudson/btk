@@ -19,7 +19,12 @@ pub struct HomeApplet {
 }
 
 impl HomeApplet {
-    fn render_cloud_cell(&mut self, cloud: &Cloud, tui: &mut Tui, state: &AppState) {
+    fn render_cloud_cell(
+        &mut self,
+        (cloud, metadata): &(Cloud, CloudMetadata),
+        tui: &mut Tui,
+        state: &AppState,
+    ) {
         tui.style(Style {
             flex_direction: FlexDirection::Row,
             justify_content: Some(JustifyContent::SpaceAround),
@@ -36,8 +41,8 @@ impl HomeApplet {
                 ..Default::default()
             })
             .add_with_border(|tui| {
-                tui.heading(&format!("{}", cloud.metadata.name));
-                tui.label(&format!("created at: {}", cloud.metadata.created_at));
+                tui.heading(&format!("{}", metadata.name));
+                tui.label(&format!("created at: {}", metadata.created_at));
                 tui.label(&format!("cloud id: {}", cloud.id_hex()));
                 if self.showing_private_key.contains(cloud.id()) {
                     tui.label(&format!("cloud key: {}", hex::encode(cloud.private_key())));

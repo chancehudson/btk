@@ -57,7 +57,7 @@ impl NotesApplet {
     }
 
     fn reload_note_names(&mut self, state: &AppState) -> Result<()> {
-        if let Some(active_cloud) = state.local_data.active_cloud()? {
+        if let Some((active_cloud, _)) = state.local_data.active_cloud()? {
             self.note_names = active_cloud
                 .db
                 .find_many::<String, (), _>(NOTES_TABLE_NAME, |_, _| true)
@@ -83,7 +83,7 @@ impl NotesApplet {
             println!("WARNING: unsaved changes");
             return Ok(());
         }
-        let active_cloud = match state.local_data.active_cloud()? {
+        let (active_cloud, _metadata) = match state.local_data.active_cloud()? {
             Some(c) => c,
             None => {
                 println!("WARNING: cannot open note: no active cloud");
@@ -118,7 +118,7 @@ impl NotesApplet {
             println!("WARNING: attempting to save note without a name");
             return Ok(());
         }
-        let active_cloud = match state.local_data.active_cloud()? {
+        let (active_cloud, _metadata) = match state.local_data.active_cloud()? {
             Some(c) => c,
             None => {
                 println!("WARNING: cannot save note: no active cloud");

@@ -10,3 +10,4 @@ serde = { workspace = true }
 anyhow = { workspace = true }
 ml-dsa = { workspace = true }
 blake3 = { workspace = true }
+anondb = { workspace = true }

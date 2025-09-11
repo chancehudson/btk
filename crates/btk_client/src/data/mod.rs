@@ -6,7 +6,6 @@ pub use cloud::CloudMetadata;
 pub use remote_cloud::RemoteCloud;
 
 use std::collections::HashMap;
-use std::mem;
 use std::path::PathBuf;
 
 use anondb::Journal;
@@ -29,8 +28,8 @@ pub struct LocalState {
     db: Journal,
     /// Path where persistent application data may be stored.
     pub local_data_dir: Option<PathBuf>,
-    pub clouds: HashMap<[u8; 32], Cloud>,
-    pub sorted_clouds: Vec<Cloud>,
+    pub clouds: HashMap<[u8; 32], (Cloud, CloudMetadata)>,
+    pub sorted_clouds: Vec<(Cloud, CloudMetadata)>,
     pub active_cloud_id: Option<[u8; 32]>,
 }
 
@@ -58,31 +57,34 @@ impl LocalState {
         Ok(())
     }
 
-    pub fn load_clouds(&mut self) -> Result<&Vec<Cloud>> {
+    pub fn load_clouds(&mut self) -> Result<()> {
         let data_dir_maybe = Self::local_data_dir()?;
 
         let mut next_clouds = HashMap::default();
         for key in self.cloud_keys()? {
             let cloud_id = Cloud::id_from_key(key.into());
-            if let Some(cloud) = self.clouds.get(&cloud_id) {
-                next_clouds.insert(cloud_id, cloud.clone());
+            if let Some((cloud, _)) = self.clouds.get(&cloud_id) {
+                next_clouds.insert(cloud_id, (cloud.clone(), cloud.load_metadata()?));
             } else {
-                next_clouds.insert(
-                    cloud_id,
-                    Cloud::from_key(key.into(), data_dir_maybe.clone())?,
-                );
+                let cloud = Cloud::from_key(key.into(), data_dir_maybe.clone())?;
+                next_clouds.insert(cloud_id, (cloud.clone(), cloud.load_metadata()?));
             }
         }
         self.clouds = next_clouds;
-        self.sorted_clouds = self.clouds.values().into_iter().cloned().collect();
-        self.sorted_clouds.sort_by(|first, second| {
-            if first.metadata.created_at == second.metadata.created_at {
-                first.metadata.name.cmp(&second.metadata.name)
+        self.sorted_clouds = self
+            .clouds
+            .values()
+            .into_iter()
+            .cloned()
+            .collect::<Vec<_>>();
+        self.sorted_clouds.sort_by(|(_, first), (_, second)| {
+            if first.created_at == second.created_at {
+                first.name.cmp(&second.name)
             } else {
-                first.metadata.created_at.cmp(&second.metadata.created_at)
+                first.created_at.cmp(&second.created_at)
             }
         });
-        Ok(&self.sorted_clouds)
+        Ok(())
     }
 
     /// Create a new encrypted cloud. This is a local keypair keyed
@@ -96,10 +98,9 @@ impl LocalState {
     /// encryption. A syntax for expressing queries
     /// (like MongoDB/SQL) can trivially be built around this.
     ///
-    /// Formally a cloud is a `Vec<network_common::Mutation>`.
-    ///
     pub fn create_cloud(&self) -> Result<Cloud> {
         let cloud = Cloud::new(Self::local_data_dir()?)?;
+        cloud.set_metadata(CloudMetadata::create())?;
         self.db
             .insert(CLOUD_KEYS_TABLE, cloud.id(), cloud.private_key())?;
         Ok(cloud)
@@ -111,7 +112,7 @@ impl LocalState {
         Ok(())
     }
 
-    pub fn active_cloud(&self) -> Result<Option<&Cloud>> {
+    pub fn active_cloud(&self) -> Result<Option<&(Cloud, CloudMetadata)>> {
         if let Some(cloud_id) = self.active_cloud_id
             && let Some(cloud) = self.clouds.get(&cloud_id)
         {
@@ -127,6 +128,7 @@ impl LocalState {
             .db
             .find_many::<[u8; 32], [u8; 32], _>(CLOUD_KEYS_TABLE, |_, _| true)?
             .into_iter()
+            .filter(|(k, _v)| k != &ACTIVE_CLOUD_KEY)
             .map(|(_k, v)| v)
             .collect())
     }

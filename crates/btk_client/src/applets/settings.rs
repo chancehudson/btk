@@ -37,12 +37,13 @@ impl Applet for SettingsApplet {
                 return;
             }
             let active_cloud_id = state.local_data.active_cloud_id.unwrap();
-            let active_cloud = state.local_data.clouds.get(&active_cloud_id);
-            if active_cloud.is_none() {
-                ui.heading("WARNING: active cloud is specified but unknown!");
-                return;
-            }
-            let active_cloud = active_cloud.unwrap();
+            let (active_cloud, metadata) = match state.local_data.clouds.get(&active_cloud_id) {
+                Some(v) => v,
+                None => {
+                    ui.heading("WARNING: active cloud is specified but unknown!");
+                    return;
+                }
+            };
             ui.heading("Cloud settings");
             ui.separator();
             if let Some(path) = &active_cloud.filepath() {
@@ -53,14 +54,14 @@ impl Applet for SettingsApplet {
             ui.separator();
 
             ui.label(&format!("id: {}", active_cloud.id_hex()));
-            ui.label(&format!("created at: {}", active_cloud.metadata.created_at));
+            ui.label(&format!("created at: {}", metadata.created_at));
 
             ui.horizontal(|ui| {
                 ui.label("name:");
                 let mut name_label =
                     EditableLabel::init(format!("{}-name", active_cloud.id_hex()), ui, &|label| {});
                 if name_label.changed() {
-                    let mut new_metadata = active_cloud.metadata.clone();
+                    let mut new_metadata = metadata.clone();
                     new_metadata.name = name_label.value.clone();
                     state
                         .pending_requests
@@ -71,7 +72,7 @@ impl Applet for SettingsApplet {
                         ))
                         .expect("failed to send update cloud metadata action request");
                 }
-                name_label.update_value_if_needed(&active_cloud.metadata.name);
+                name_label.update_value_if_needed(&metadata.name);
                 ui.add(name_label);
             });
             ui.horizontal(|ui| {
@@ -82,7 +83,7 @@ impl Applet for SettingsApplet {
                     &|label| {},
                 );
                 if description_label.changed() {
-                    let mut new_metadata = active_cloud.metadata.clone();
+                    let mut new_metadata = metadata.clone();
                     new_metadata.description = description_label.value.clone();
                     state
                         .pending_requests
@@ -93,39 +94,41 @@ impl Applet for SettingsApplet {
                         ))
                         .expect("failed to send update cloud metadata action request");
                 }
-                description_label.update_value_if_needed(&active_cloud.metadata.description);
+                description_label.update_value_if_needed(&metadata.description);
                 ui.add(description_label);
             });
 
             ui.separator();
             ui.label("Remote connection");
-            ui.horizontal(|ui| {
-                ui.label("remote url");
-                let mut url_label =
-                    EditableLabel::init(format!("{}-url", active_cloud.id_hex()), ui, &|label| {});
-                if url_label.changed() {
-                    let mut new_metadata = active_cloud.metadata.clone();
-                    if url_label.value.trim().is_empty() {
-                        new_metadata.remote_url = None;
-                    } else {
-                        new_metadata.remote_url = Some(url_label.value.to_string());
-                    }
-                    state
-                        .pending_requests
-                        .0
-                        .send(ActionRequest::UpdateCloudMetadata(
-                            active_cloud_id,
-                            new_metadata,
-                        ))
-                        .expect("failed to send update cloud metadata action request");
-                }
-                if let Some(remote_url) = &active_cloud.metadata.remote_url {
-                    url_label.update_value_if_needed(&remote_url);
-                } else {
-                    url_label.update_value_if_needed("");
-                }
-                ui.add(url_label);
-            });
+            // ui.horizontal(|ui| {
+            //     ui.label("remote url:");
+            //     let mut url_label =
+            //         EditableLabel::init(format!("{}-url", active_cloud.id_hex()), ui, &|label| {});
+            //     if url_label.changed() {
+            //         let mut new_metadata = active_cloud
+            //             .load_metadata()
+            //             .expect("failed to load existing metadata");
+            //         if url_label.value.trim().is_empty() {
+            //             new_metadata.remote_url = None;
+            //         } else {
+            //             new_metadata.remote_url = Some(url_label.value.to_string());
+            //         }
+            //         state
+            //             .pending_requests
+            //             .0
+            //             .send(ActionRequest::UpdateCloudMetadata(
+            //                 active_cloud_id,
+            //                 new_metadata,
+            //             ))
+            //             .expect("failed to send update cloud metadata action request");
+            //     }
+            //     if let Some(remote_url) = &active_cloud.metadata.remote_url {
+            //         url_label.update_value_if_needed(&remote_url);
+            //     } else {
+            //         url_label.update_value_if_needed("");
+            //     }
+            //     ui.add(url_label);
+            // });
         });
     }
 }
