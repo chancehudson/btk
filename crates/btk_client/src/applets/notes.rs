@@ -57,15 +57,15 @@ impl NotesApplet {
     }
 
     fn reload_note_names(&mut self, state: &AppState) -> Result<()> {
-        self.note_names = state
-            .local_data
-            .active_cloud()?
-            .db
-            .find_many::<String, (), _>(NOTES_TABLE_NAME, |_, _| true)
-            .unwrap_or(vec![])
-            .into_iter()
-            .map(|(name, _)| name)
-            .collect::<Vec<_>>();
+        if let Some(active_cloud) = state.local_data.active_cloud()? {
+            self.note_names = active_cloud
+                .db
+                .find_many::<String, (), _>(NOTES_TABLE_NAME, |_, _| true)
+                .unwrap_or(vec![])
+                .into_iter()
+                .map(|(name, _)| name)
+                .collect::<Vec<_>>();
+        }
         Ok(())
     }
 
@@ -83,10 +83,17 @@ impl NotesApplet {
             println!("WARNING: unsaved changes");
             return Ok(());
         }
+        let active_cloud = match state.local_data.active_cloud()? {
+            Some(c) => c,
+            None => {
+                println!("WARNING: cannot open note: no active cloud");
+                return Ok(());
+            }
+        };
 
         // load the diffs and apply them to construct the latest state
         let mut active_note = String::default();
-        let tx = state.local_data.active_cloud()?.db.begin_read()?;
+        let tx = active_cloud.db.begin_read()?;
         let table = tx.open_table(Journal::table_definition(&Self::table_name(&note_name)))?;
         let mut range = table.range::<anondb::Bytes>(..)?;
         while let Some(entry) = range.next() {
@@ -111,9 +118,17 @@ impl NotesApplet {
             println!("WARNING: attempting to save note without a name");
             return Ok(());
         }
+        let active_cloud = match state.local_data.active_cloud()? {
+            Some(c) => c,
+            None => {
+                println!("WARNING: cannot save note: no active cloud");
+                return Ok(());
+            }
+        };
+
         // We'll save each note to its own table. Each entry in the table represents a diff from
         // the previous version.
-        let mut tx = state.local_data.active_cloud()?.db.begin_write()?;
+        let mut tx = active_cloud.db.begin_write()?;
 
         // Save our text diff for the current note
         let mut note_table = tx.open_table(&Self::table_name(&self.active_note_name))?;

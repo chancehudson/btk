@@ -319,6 +319,7 @@ impl eframe::App for App {
                         cloud
                             .set_metadata(new_metadata)
                             .expect("failed to update cloud metadat");
+                        self.state.reload_clouds();
                     } else {
                         println!("WARNING: attempting to update metadata for unknown cloud");
                     }

@@ -86,9 +86,22 @@ impl Cloud {
     pub fn set_metadata(&mut self, metadata: CloudMetadata) -> Result<()> {
         self.db
             .insert(CLOUD_TABLE, &METADATA_KEY.to_string(), &metadata)?;
-        self.metadata = metadata;
-        if let Some(remote_url) = &self.metadata.remote_url {
-            self.remote = Some(RemoteCloud::new(remote_url.clone()));
+        self.load_metadata()?;
+        Ok(())
+    }
+
+    pub fn load_metadata(&mut self) -> Result<()> {
+        let last_remote_url = self.metadata.remote_url.clone();
+        self.metadata = self
+            .db
+            .get(CLOUD_TABLE, &METADATA_KEY.to_string())?
+            .unwrap_or_default();
+        if self.metadata.remote_url != last_remote_url {
+            if let Some(remote_url) = &self.metadata.remote_url {
+                self.remote = Some(RemoteCloud::new(remote_url.clone()));
+            } else {
+                self.remote = None;
+            }
         }
         Ok(())
     }
@@ -162,6 +175,14 @@ impl Cloud {
         let signer = MlDsa87::key_gen_internal(&private_key.into());
         let public_key = signer.verifying_key().encode().to_vec();
         let id: [u8; 32] = blake3::hash(&public_key).into();
+        #[cfg(debug_assertions)]
+        {
+            assert_eq!(
+                id,
+                Self::id_from_key(private_key),
+                "cloud id mismatch, data::Cloud"
+            );
+        }
         let hex_string = hex::encode(&id) + ".redb";
         let (db, filepath_maybe) = if let Some(data_dir) = data_dir_maybe {
             let filepath = data_dir.join(hex_string);

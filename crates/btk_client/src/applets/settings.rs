@@ -4,6 +4,7 @@ use crate::app::ActionRequest;
 use crate::app::AppEvent;
 use crate::app_state::AppState;
 use crate::applets::Applet;
+use crate::widgets::EditableLabel;
 
 #[derive(Default)]
 pub struct SettingsApplet {
@@ -50,54 +51,81 @@ impl Applet for SettingsApplet {
                 ui.label("Local data path: None (in memory only)");
             }
             ui.separator();
-            ui.label(&format!("cloud name: {}", active_cloud.metadata.name));
-            ui.label(&format!(
-                "cloud description: {}",
-                active_cloud.metadata.description
-            ));
-            ui.label(&format!(
-                "cloud created at: {}",
-                active_cloud.metadata.created_at
-            ));
-            ui.label(&format!("cloud id: {}", active_cloud.id_hex()));
+
+            ui.label(&format!("id: {}", active_cloud.id_hex()));
+            ui.label(&format!("created at: {}", active_cloud.metadata.created_at));
+
+            ui.horizontal(|ui| {
+                ui.label("name:");
+                let mut name_label =
+                    EditableLabel::init(format!("{}-name", active_cloud.id_hex()), ui, &|label| {});
+                if name_label.changed() {
+                    let mut new_metadata = active_cloud.metadata.clone();
+                    new_metadata.name = name_label.value.clone();
+                    state
+                        .pending_requests
+                        .0
+                        .send(ActionRequest::UpdateCloudMetadata(
+                            active_cloud_id,
+                            new_metadata,
+                        ))
+                        .expect("failed to send update cloud metadata action request");
+                }
+                name_label.update_value_if_needed(&active_cloud.metadata.name);
+                ui.add(name_label);
+            });
+            ui.horizontal(|ui| {
+                ui.label("description:");
+                let mut description_label = EditableLabel::init(
+                    format!("{}-description", active_cloud.id_hex()),
+                    ui,
+                    &|label| {},
+                );
+                if description_label.changed() {
+                    let mut new_metadata = active_cloud.metadata.clone();
+                    new_metadata.description = description_label.value.clone();
+                    state
+                        .pending_requests
+                        .0
+                        .send(ActionRequest::UpdateCloudMetadata(
+                            active_cloud_id,
+                            new_metadata,
+                        ))
+                        .expect("failed to send update cloud metadata action request");
+                }
+                description_label.update_value_if_needed(&active_cloud.metadata.description);
+                ui.add(description_label);
+            });
+
             ui.separator();
             ui.label("Remote connection");
-            ui.label(&format!(
-                "url: {}",
-                active_cloud
-                    .metadata
-                    .remote_url
-                    .clone()
-                    .unwrap_or("None".to_string())
-            ));
-            let response = egui::TextEdit::singleline(&mut self.new_remote_url)
-                .hint_text("ws://localhost:5001")
-                .show(ui)
-                .response;
-            if response.has_focus() && self.new_remote_url.len() > 3 {
-                response.show_tooltip_ui(|ui| {
-                    ui.label("Press enter to save");
-                });
-            }
-            if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
-                // TODO: first check if we're overwriting an existing note
-                let remote_url = if self.new_remote_url.is_empty() {
-                    None
+            ui.horizontal(|ui| {
+                ui.label("remote url");
+                let mut url_label =
+                    EditableLabel::init(format!("{}-url", active_cloud.id_hex()), ui, &|label| {});
+                if url_label.changed() {
+                    let mut new_metadata = active_cloud.metadata.clone();
+                    if url_label.value.trim().is_empty() {
+                        new_metadata.remote_url = None;
+                    } else {
+                        new_metadata.remote_url = Some(url_label.value.to_string());
+                    }
+                    state
+                        .pending_requests
+                        .0
+                        .send(ActionRequest::UpdateCloudMetadata(
+                            active_cloud_id,
+                            new_metadata,
+                        ))
+                        .expect("failed to send update cloud metadata action request");
+                }
+                if let Some(remote_url) = &active_cloud.metadata.remote_url {
+                    url_label.update_value_if_needed(&remote_url);
                 } else {
-                    Some(std::mem::take(&mut self.new_remote_url))
-                };
-                let mut new_metadata = active_cloud.metadata.clone();
-                new_metadata.remote_url = remote_url;
-                state
-                    .pending_requests
-                    .0
-                    .send(ActionRequest::UpdateCloudMetadata(
-                        active_cloud_id,
-                        new_metadata,
-                    ))
-                    .expect("failed to send update cloud metadata action request");
-            }
+                    url_label.update_value_if_needed("");
+                }
+                ui.add(url_label);
+            });
         });
     }
 }

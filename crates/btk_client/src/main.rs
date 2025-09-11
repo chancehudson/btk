@@ -3,6 +3,7 @@ mod app_state;
 mod applets;
 mod data;
 mod network;
+mod widgets;
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {

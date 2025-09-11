@@ -75,8 +75,13 @@ impl LocalState {
         }
         self.clouds = next_clouds;
         self.sorted_clouds = self.clouds.values().into_iter().cloned().collect();
-        self.sorted_clouds
-            .sort_by(|first, second| first.metadata.created_at.cmp(&second.metadata.created_at));
+        self.sorted_clouds.sort_by(|first, second| {
+            if first.metadata.created_at == second.metadata.created_at {
+                first.metadata.name.cmp(&second.metadata.name)
+            } else {
+                first.metadata.created_at.cmp(&second.metadata.created_at)
+            }
+        });
         Ok(&self.sorted_clouds)
     }
 
@@ -106,13 +111,13 @@ impl LocalState {
         Ok(())
     }
 
-    pub fn active_cloud(&self) -> Result<&Cloud> {
+    pub fn active_cloud(&self) -> Result<Option<&Cloud>> {
         if let Some(cloud_id) = self.active_cloud_id
             && let Some(cloud) = self.clouds.get(&cloud_id)
         {
-            Ok(cloud)
+            Ok(Some(cloud))
         } else {
-            anyhow::bail!("active cloud not found");
+            Ok(None)
         }
     }
 
