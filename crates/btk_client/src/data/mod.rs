@@ -7,6 +7,7 @@ pub use remote_cloud::RemoteCloud;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use anondb::Journal;
 use anyhow::Result;
@@ -28,8 +29,9 @@ pub struct LocalState {
     db: Journal,
     /// Path where persistent application data may be stored.
     pub local_data_dir: Option<PathBuf>,
-    pub clouds: HashMap<[u8; 32], (Cloud, CloudMetadata)>,
-    pub sorted_clouds: Vec<(Cloud, CloudMetadata)>,
+    pub clouds: HashMap<[u8; 32], (Arc<Cloud>, CloudMetadata)>,
+    pub remote_clouds: HashMap<[u8; 32], RemoteCloud>,
+    pub sorted_clouds: Vec<(Arc<Cloud>, CloudMetadata)>,
     pub active_cloud_id: Option<[u8; 32]>,
 }
 
@@ -45,6 +47,7 @@ impl LocalState {
             clouds: HashMap::default(),
             active_cloud_id: None,
             sorted_clouds: Vec::default(),
+            remote_clouds: HashMap::default(),
         })
     }
 
@@ -66,11 +69,30 @@ impl LocalState {
             if let Some((cloud, _)) = self.clouds.get(&cloud_id) {
                 next_clouds.insert(cloud_id, (cloud.clone(), cloud.load_metadata()?));
             } else {
-                let cloud = Cloud::from_key(key.into(), data_dir_maybe.clone())?;
+                let cloud = Arc::new(Cloud::from_key(key.into(), data_dir_maybe.clone())?);
                 next_clouds.insert(cloud_id, (cloud.clone(), cloud.load_metadata()?));
             }
         }
         self.clouds = next_clouds;
+        for (cloud, metadata) in self.clouds.values() {
+            match self.remote_clouds.get(cloud.id()) {
+                Some(_) => {}
+                None => {
+                    println!("opening connection for cloud {}", metadata.name);
+                    self.remote_clouds.insert(
+                        *cloud.id(),
+                        RemoteCloud::new(
+                            *cloud.id(),
+                            "ws://127.0.0.1:5001".to_string(),
+                            "http://127.0.0.1:8000".to_string(),
+                            cloud.clone(),
+                        ),
+                    );
+                }
+            }
+        }
+        self.remote_clouds
+            .retain(|k, _| self.clouds.contains_key(k));
         self.sorted_clouds = self
             .clouds
             .values()
@@ -112,13 +134,13 @@ impl LocalState {
         Ok(())
     }
 
-    pub fn active_cloud(&self) -> Result<Option<&(Cloud, CloudMetadata)>> {
+    pub fn active_cloud(&self) -> Option<&(Arc<Cloud>, CloudMetadata)> {
         if let Some(cloud_id) = self.active_cloud_id
             && let Some(cloud) = self.clouds.get(&cloud_id)
         {
-            Ok(Some(cloud))
+            Some(cloud)
         } else {
-            Ok(None)
+            None
         }
     }
 

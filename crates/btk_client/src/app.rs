@@ -12,6 +12,7 @@ use crate::app_state::AppState;
 use crate::applets::*;
 use crate::data::CloudMetadata;
 use crate::data::LocalState;
+use crate::tokio;
 
 pub enum AppEvent {
     ActiveAppletChanged,
@@ -146,7 +147,7 @@ impl App {
     }
 
     fn render_clouds_menu(&mut self, ctx: &egui::Context) {
-        egui::SidePanel::left("clouds_menu")
+        egui::SidePanel::left("clouds_side_menu")
             .resizable(true)
             .default_width(200.0)
             .width_range(150.0..=500.0)
@@ -230,6 +231,35 @@ impl App {
                     });
             });
     }
+
+    fn render_footer(&mut self, ctx: &egui::Context) {
+        egui::TopBottomPanel::bottom("root_footer").show(ctx, |ui| {
+            egui_taffy::tui(ui, "root_footer_taffy")
+                .reserve_available_space()
+                .style(Style {
+                    display: Display::Flex,
+                    flex_direction: FlexDirection::Row,
+                    justify_content: Some(JustifyContent::SpaceBetween),
+                    min_size: Size {
+                        width: percent(1.0),
+                        height: length(0.0),
+                    },
+                    max_size: Size {
+                        width: percent(1.0),
+                        height: percent(1.0),
+                    },
+                    ..Default::default()
+                })
+                .show(|tui| {
+                    if let Some((_cloud, metadata)) = self.state.local_data.active_cloud() {
+                        tui.label(&metadata.name);
+                    } else {
+                        tui.label("No active cloud!");
+                    }
+                    tui.label("right");
+                });
+        });
+    }
 }
 
 impl eframe::App for App {
@@ -239,12 +269,6 @@ impl eframe::App for App {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // for cloud in self.state.local_data.clouds.values_mut() {
-        //     cloud
-        //         .update()
-        //         .expect(&format!("cloud {} failed to update", cloud.metadata.name));
-        // }
-
         let render_start = Instant::now();
 
         let pending_events = self.state.pending_events.1.drain().collect();
@@ -265,6 +289,7 @@ impl eframe::App for App {
 
         self.handle_keyboard_input(ctx);
         self.show_framerate_window(ctx);
+        self.render_footer(ctx);
 
         // top tab bar
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {

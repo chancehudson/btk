@@ -84,7 +84,8 @@ impl Cloud {
     }
 
     pub fn new(data_dir_maybe: Option<PathBuf>) -> Result<Self> {
-        Self::from_key(rand::random(), data_dir_maybe)
+        let private_key = rand::random();
+        Self::from_key(private_key, data_dir_maybe)
     }
 
     pub fn id_from_key(private_key: [u8; 32]) -> [u8; 32] {

@@ -1,3 +1,13 @@
+#[cfg(target_arch = "wasm32")]
+pub use tokio_with_wasm as tokio;
+
+#[cfg(not(all(
+    target_arch = "wasm32",
+    target_vendor = "unknown",
+    target_os = "unknown"
+)))]
+pub use tokio;
+
 mod app;
 mod app_state;
 mod applets;
@@ -6,7 +16,8 @@ mod network;
 mod widgets;
 
 #[cfg(not(target_arch = "wasm32"))]
-fn main() -> eframe::Result {
+#[tokio::main]
+async fn main() -> eframe::Result {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
 
     let native_options = eframe::NativeOptions {

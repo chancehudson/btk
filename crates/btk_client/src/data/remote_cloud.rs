@@ -5,51 +5,71 @@ use anyhow::Result;
 use network_common::*;
 
 use crate::network::NetworkConnection;
+use crate::tokio;
 
-#[derive(Default, Clone)]
-pub struct CloudSyncState {
-    /// The latest index we've confirmed matches with the remote cloud. We trust the remote cloud
-    /// not to alter history.
-    pub latest_synced_index: u64,
-}
+use super::Cloud;
 
 /// A trustlessly replicated Anondb instance with simple conflict resolution for realtime
 /// collaboration among keyholders.
 #[derive(Clone)]
 pub struct RemoteCloud {
-    /// Local sync state. Tracks latest mutation known to the server.
-    local_db: Journal,
     id: [u8; 32],
-    url: String,
+    http_url: String,
+    ws_url: String,
     connection_maybe: Option<Arc<NetworkConnection>>,
+    latest_synced_index: Option<u64>,
+    cloud: Arc<Cloud>,
 }
 
 impl RemoteCloud {
-    pub fn new(id: [u8; 32], url: String) -> Result<Self> {
-        Ok(Self {
-            connection_maybe: Some(Arc::new(NetworkConnection::attempt_connection(url.clone()))),
-            url,
+    pub fn new(id: [u8; 32], ws_url: String, http_url: String, cloud: Arc<Cloud>) -> Self {
+        let mut out = Self {
+            connection_maybe: None,
+            ws_url,
+            http_url,
             id,
-            local_db: if let Some(data_dir) = crate::data::LocalState::local_data_dir()? {
-                let filepath = data_dir.join(hex::encode(id) + "_sync.redb");
-                Journal::at_path(&filepath)?
-            } else {
-                Journal::in_memory(None)?
-            },
-        })
+            latest_synced_index: None,
+            cloud,
+        };
+        out.reconnect_if_needed();
+        out
+    }
+
+    pub fn start_sync_loop(&self) {
+        let cloud = self.cloud.clone();
+        let http_url = self.http_url.clone();
+        tokio::spawn(async move {
+            let client = reqwest::Client::new();
+            let base_url = reqwest::Url::parse(&http_url).unwrap();
+            let mut latest_synced_index: Option<u64> = None;
+            loop {
+                if latest_synced_index.is_none() {
+                    let mut url = base_url.join("/state").unwrap();
+                    url.set_query(Some(&format!("cloud_id={}", cloud.id_hex())));
+                    // let res = client.get(url).send().await?;
+                    // if res.status().is_success() {
+                    //     // let res_bytes = res.bytes()?;
+                    // } else {
+                    //     println!("failed to retrieve cloud state");
+                    // }
+                    tokio::spawn(async move {});
+                }
+            }
+        });
     }
 
     pub fn tick(&self) -> Result<()> {
+        if self.latest_synced_index.is_none() {
+            // load the latest known index from the server
+            return Ok(());
+        }
         for response in self.receive()? {
             match response {
                 Response::Pong => {
                     println!("pong");
                 }
-                Response::CloudMutated(index, mutation_hash) => {}
+                Response::CloudMutated(index) => {}
                 Response::Authenticated(cloud_id) => {}
-                Response::CloudMutation(mutation) => {
-                    // ingest the mutation
-                }
             }
         }
         Ok(())
@@ -58,7 +78,7 @@ impl RemoteCloud {
     pub fn reconnect_if_needed(&mut self) {
         if !self.is_connected() {
             self.connection_maybe = Some(Arc::new(NetworkConnection::attempt_connection(
-                self.url.clone(),
+                self.ws_url.clone(),
             )));
         }
     }

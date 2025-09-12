@@ -2,6 +2,7 @@
 ///
 ///
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use egui_taffy::Tui;
 use egui_taffy::TuiBuilderLogic;
@@ -21,7 +22,7 @@ pub struct HomeApplet {
 impl HomeApplet {
     fn render_cloud_cell(
         &mut self,
-        (cloud, metadata): &(Cloud, CloudMetadata),
+        (cloud, metadata): &(Arc<Cloud>, CloudMetadata),
         tui: &mut Tui,
         state: &AppState,
     ) {

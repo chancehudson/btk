@@ -7,7 +7,7 @@ license-file = "LICENSE"
 [dependencies]
 anyhow = { workspace = true }
 bincode = { workspace = true }
-flume = { workspace = true }
+flume = { workspace = true, features = ["async"] }
 serde = { workspace = true }
 blake3 = { workspace = true }
 redb = { workspace = true }
@@ -20,5 +20,6 @@ once_cell = "1.20.3"
 futures-util = "0.3.31"
 dashmap = "6.1.0"
 tokio-tungstenite = { version = "0.26.1", features = ["handshake", "native-tls"] }
+tiny_http = "0.12"
 
 network_common = { path = "../network_common" }
