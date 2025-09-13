@@ -7,6 +7,7 @@ use anyhow::Result;
 use chacha20::ChaCha20;
 use chacha20::cipher::KeyIvInit;
 use chacha20::cipher::StreamCipher;
+use ml_dsa::B32;
 use ml_dsa::KeyGen;
 use ml_dsa::MlDsa87;
 use ml_dsa::signature::Signer;
@@ -19,7 +20,7 @@ use network_common::Mutation;
 const CLOUD_TABLE_NAME: &str = "_______cloud_data";
 const METADATA_KEY: &str = "metadata";
 
-#[derive(Default, Serialize, Deserialize, Clone)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct CloudMetadata {
     pub created_at: u64,
     pub name: String,
@@ -124,7 +125,7 @@ impl Cloud {
         })
     }
 
-    fn decrypt_tx(&self, mutation: Mutation) -> Result<(JournalTransaction, u64)> {
+    pub(crate) fn decrypt_tx(&self, mutation: Mutation) -> Result<(JournalTransaction, u64)> {
         let signer = MlDsa87::key_gen_internal(&self.private_key.into());
 
         if &mutation.public_key_hash != self.id() {
@@ -153,12 +154,16 @@ impl Cloud {
     }
 
     /// Accept an anondb transaction and create a trustless representation.
-    fn encrypt_tx(&self, transaction: JournalTransaction, index: u64) -> Result<Mutation> {
+    pub(crate) fn encrypt_tx(
+        &self,
+        transaction: JournalTransaction,
+        index: u64,
+    ) -> Result<Mutation> {
         let signer = MlDsa87::key_gen_internal(&self.private_key.into());
 
         let salt: [u8; 32] = rand::random();
 
-        let mutation_key_preimage = Bytes::encode(&(&self.private_key, &salt))?;
+        let mutation_key_preimage = Bytes::encode(&(&self.private_key, index, &salt))?;
         let mutation_key = blake3::hash(&mutation_key_preimage.as_slice())
             .as_bytes()
             .to_vec();

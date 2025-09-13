@@ -2,8 +2,8 @@ use anyhow::Result;
 
 use crate::app::ActionRequest;
 use crate::app::AppEvent;
-use crate::app_state::AppState;
 use crate::applets::Applet;
+use crate::data::AppState;
 use crate::widgets::EditableLabel;
 
 #[derive(Default)]
@@ -25,6 +25,9 @@ impl Applet for SettingsApplet {
                 AppEvent::ActiveCloudChanged => {
                     self.new_remote_url = String::default();
                 }
+                AppEvent::RemoteCloudUpdate(cloud_id) => {
+                    // nothing to handle
+                }
             }
         }
         Ok(())
@@ -32,12 +35,12 @@ impl Applet for SettingsApplet {
 
     fn render(&mut self, ctx: &egui::Context, state: &AppState) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            if state.local_data.active_cloud_id.is_none() {
+            if state.active_cloud_id.is_none() {
                 ui.heading("no active cloud!");
                 return;
             }
-            let active_cloud_id = state.local_data.active_cloud_id.unwrap();
-            let (active_cloud, metadata) = match state.local_data.clouds.get(&active_cloud_id) {
+            let active_cloud_id = state.active_cloud_id.unwrap();
+            let (active_cloud, metadata) = match state.cloud_by_id(&active_cloud_id) {
                 Some(v) => v,
                 None => {
                     ui.heading("WARNING: active cloud is specified but unknown!");
@@ -96,6 +99,10 @@ impl Applet for SettingsApplet {
                 }
                 description_label.update_value_if_needed(&metadata.description);
                 ui.add(description_label);
+            });
+            ui.horizontal(|ui| {
+                ui.label("key:");
+                ui.label(hex::encode(active_cloud.private_key()));
             });
 
             ui.separator();

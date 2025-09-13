@@ -9,7 +9,6 @@ pub use tokio_with_wasm as tokio;
 pub use tokio;
 
 mod app;
-mod app_state;
 mod applets;
 mod data;
 mod network;

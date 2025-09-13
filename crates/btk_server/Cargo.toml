@@ -23,3 +23,4 @@ tokio-tungstenite = { version = "0.26.1", features = ["handshake", "native-tls"]
 tiny_http = "0.12"
 
 network_common = { path = "../network_common" }
+url = "2.5.7"

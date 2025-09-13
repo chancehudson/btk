@@ -8,15 +8,15 @@ use indexmap::IndexMap;
 use web_time::Duration;
 use web_time::Instant;
 
-use crate::app_state::AppState;
 use crate::applets::*;
+use crate::data::AppState;
 use crate::data::CloudMetadata;
-use crate::data::LocalState;
-use crate::tokio;
 
 pub enum AppEvent {
     ActiveAppletChanged,
     ActiveCloudChanged,
+    /// An update was received from the remote. The ui should be resynced
+    RemoteCloudUpdate([u8; 32]),
 }
 
 pub enum ActionRequest {
@@ -33,6 +33,8 @@ pub struct App {
     last_render_time: Duration,
     active_applet: String,
     applets: IndexMap<String, Box<dyn Applet>>,
+    showing_import: bool,
+    import_key: String,
 }
 
 impl App {
@@ -48,14 +50,11 @@ impl App {
         });
 
         // construct application state
-        let mut state = AppState {
-            local_data: LocalState::new()?,
-            pending_events: flume::unbounded(),
-            pending_requests: flume::unbounded(),
-        };
+        let mut state = AppState::new()?;
 
-        state.local_data.init()?;
-        if let Some(cloud_id) = state.local_data.active_cloud_id {
+        state.init()?;
+
+        if let Some(cloud_id) = state.active_cloud_id {
             // trigger an event being sent so applets can handle loading
             state.switch_cloud(cloud_id);
         }
@@ -84,6 +83,8 @@ impl App {
             show_stats: cfg!(debug_assertions),
             last_render_time: Duration::default(),
             show_clouds_menu: false,
+            showing_import: false,
+            import_key: String::default(),
         })
     }
 }
@@ -156,14 +157,12 @@ impl App {
                     ui.horizontal(|ui| {
                         ui.heading("Clouds");
                         if ui.button("+").clicked() {
-                            self.state
-                                .local_data
-                                .create_cloud()
-                                .expect("failed to create cloud");
-                            self.state
-                                .local_data
-                                .load_clouds()
-                                .expect("failed to load clouds");
+                            self.state.create_cloud().expect("failed to create cloud");
+                            self.state.load_clouds().expect("failed to load clouds");
+                        }
+                        if ui.button("import").clicked() {
+                            self.showing_import = true;
+                            self.import_key = String::default();
                         }
                     });
                 });
@@ -196,7 +195,7 @@ impl App {
                         ..Default::default()
                     })
                     .show(|tui| {
-                        for (cloud, metadata) in &self.state.local_data.sorted_clouds {
+                        for (cloud, metadata) in &self.state.sorted_clouds {
                             tui.style(Style {
                                 flex_direction: FlexDirection::Row,
                                 align_items: Some(AlignItems::Center),
@@ -213,11 +212,7 @@ impl App {
                                     })
                                     .selectable(
                                         *cloud.id()
-                                            == self
-                                                .state
-                                                .local_data
-                                                .active_cloud_id
-                                                .unwrap_or_default(),
+                                            == self.state.active_cloud_id.unwrap_or_default(),
                                         |tui| {
                                             tui.heading(&metadata.name);
                                         },
@@ -230,6 +225,29 @@ impl App {
                         }
                     });
             });
+    }
+
+    fn render_import_view(&mut self, ctx: &egui::Context) {
+        egui::Window::new("import cloud").show(ctx, |ui| {
+            ui.label("enter your private key");
+            let input = ui.text_edit_singleline(&mut self.import_key);
+
+            if input.lost_focus() && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+                match self.state.import_cloud(&self.import_key) {
+                    Ok(cloud_id) => {
+                        self.state.load_clouds().unwrap();
+                        self.state.set_active_cloud(cloud_id).unwrap();
+                        self.showing_import = false;
+                        self.import_key = String::default();
+                    }
+                    Err(_) => {}
+                }
+            }
+            if ui.button("cancel").clicked() {
+                self.showing_import = false;
+                self.import_key = String::default();
+            }
+        });
     }
 
     fn render_footer(&mut self, ctx: &egui::Context) {
@@ -251,7 +269,7 @@ impl App {
                     ..Default::default()
                 })
                 .show(|tui| {
-                    if let Some((_cloud, metadata)) = self.state.local_data.active_cloud() {
+                    if let Some((_cloud, metadata)) = self.state.active_cloud() {
                         tui.label(&metadata.name);
                     } else {
                         tui.label("No active cloud!");
@@ -269,6 +287,7 @@ impl eframe::App for App {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        ctx.request_repaint_after(Duration::from_secs(1));
         let render_start = Instant::now();
 
         let pending_events = self.state.pending_events.1.drain().collect();
@@ -276,6 +295,12 @@ impl eframe::App for App {
             applet
                 .handle_app_events(&pending_events, &self.state)
                 .expect(&format!("applet {} failed to handle events", applet.name()));
+        }
+        for event in &pending_events {
+            if matches!(event, AppEvent::RemoteCloudUpdate(_)) {
+                self.state.reload_clouds();
+                break;
+            }
         }
         // we resend here so the `update` function in the active applet can access these. The
         // channel will be cleared at the end of this function regardless.
@@ -290,6 +315,9 @@ impl eframe::App for App {
         self.handle_keyboard_input(ctx);
         self.show_framerate_window(ctx);
         self.render_footer(ctx);
+        if self.showing_import {
+            self.render_import_view(ctx);
+        }
 
         // top tab bar
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
@@ -347,12 +375,11 @@ impl eframe::App for App {
         for r in self.state.drain_pending_app_requests() {
             match r {
                 ActionRequest::UpdateCloudMetadata(cloud_id, new_metadata) => {
-                    if let Some((cloud, _)) = self.state.local_data.clouds.get(&cloud_id) {
+                    if let Some((cloud, _)) = self.state.cloud_by_id(&cloud_id) {
                         cloud
                             .set_metadata(new_metadata)
                             .expect("failed to update cloud metadata");
                         self.state
-                            .local_data
                             .load_clouds()
                             .expect("failed to load clouds after metadata update");
                     } else {
@@ -360,14 +387,10 @@ impl eframe::App for App {
                     }
                 }
                 ActionRequest::LoadClouds => {
-                    self.state
-                        .local_data
-                        .load_clouds()
-                        .expect("failed to load clouds");
+                    self.state.load_clouds().expect("failed to load clouds");
                 }
                 ActionRequest::SwitchCloud(cloud_id) => {
                     self.state
-                        .local_data
                         .set_active_cloud(cloud_id)
                         .expect("failed to set active cloud");
                     self.state

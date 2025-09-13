@@ -12,7 +12,7 @@ use egui_taffy::taffy::prelude::*;
 
 use super::Applet;
 use crate::app::AppEvent;
-use crate::app_state::AppState;
+use crate::data::AppState;
 
 #[derive(Default, PartialEq)]
 enum LastScrolled {
@@ -57,7 +57,7 @@ impl NotesApplet {
     }
 
     fn reload_note_names(&mut self, state: &AppState) -> Result<()> {
-        if let Some((active_cloud, _)) = state.local_data.active_cloud() {
+        if let Some((active_cloud, _)) = state.active_cloud() {
             self.note_names = active_cloud
                 .db
                 .find_many::<String, (), _>(NOTES_TABLE_NAME, |_, _| true)
@@ -78,16 +78,42 @@ impl NotesApplet {
         self.active_note_name = String::default();
     }
 
-    fn open(&mut self, note_name: String, state: &AppState) -> Result<()> {
-        if self.active_note_unsaved != self.active_note {
-            println!("WARNING: unsaved changes");
+    fn merge_if_needed(&mut self, state: &AppState) -> Result<()> {
+        let new_active_note = self.load_note(&self.active_note_name, state)?;
+        if self.active_note == new_active_note {
+            // nothing to merge
             return Ok(());
         }
-        let (active_cloud, _metadata) = match state.local_data.active_cloud() {
+
+        // otherwise we need to prepare a diff from our unsaved changes to the last note. Then
+        // we'll try to apply that diff to the new note.
+
+        match diffy::merge(
+            &self.active_note,
+            &self.active_note_unsaved,
+            &new_active_note,
+        ) {
+            Ok(merged) => {
+                self.active_note = new_active_note;
+                self.active_note_unsaved = merged;
+            }
+            Err(e) => {
+                println!("merge conflict in note! overwriting local changes");
+                self.active_note = new_active_note;
+                self.active_note_unsaved = self.active_note.clone();
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Attempt to open a note by loading all diffs and applying them in sequence.
+    fn load_note(&self, note_name: &str, state: &AppState) -> Result<String> {
+        let (active_cloud, _metadata) = match state.active_cloud() {
             Some(c) => c,
             None => {
                 println!("WARNING: cannot open note: no active cloud");
-                return Ok(());
+                return Ok(String::default());
             }
         };
 
@@ -106,9 +132,18 @@ impl NotesApplet {
             active_note = diffy::apply(&active_note, &diff)?;
         }
 
-        self.active_note = active_note.clone();
-        self.active_note_unsaved = active_note;
-        self.active_note_name = note_name;
+        Ok(active_note)
+    }
+
+    fn open(&mut self, note_name: &str, state: &AppState) -> Result<()> {
+        if self.active_note_unsaved != self.active_note {
+            println!("WARNING: unsaved changes");
+            return Ok(());
+        }
+
+        self.active_note = self.load_note(note_name, state)?;
+        self.active_note_unsaved = self.active_note.clone();
+        self.active_note_name = note_name.to_string();
 
         Ok(())
     }
@@ -118,7 +153,7 @@ impl NotesApplet {
             println!("WARNING: attempting to save note without a name");
             return Ok(());
         }
-        let (active_cloud, _metadata) = match state.local_data.active_cloud() {
+        let (active_cloud, _metadata) = match state.active_cloud() {
             Some(c) => c,
             None => {
                 println!("WARNING: cannot save note: no active cloud");
@@ -205,7 +240,7 @@ impl NotesApplet {
                                 .clicked()
                             {
                                 ctx.memory_mut(|mem| mem.request_focus(INPUT_NOTE_SOURCE.into()));
-                                self.open(name.clone(), state)
+                                self.open(&name, state)
                                     .expect(&format!("failed to open note: {name}"));
                             }
                         }
@@ -228,6 +263,14 @@ impl Applet for NotesApplet {
                 AppEvent::ActiveCloudChanged => {
                     self.reload_note_names(state)?;
                     self.reset_note_state();
+                }
+                AppEvent::RemoteCloudUpdate(cloud_id) => {
+                    if cloud_id == &state.active_cloud_id.unwrap_or_default() {
+                        self.reload_note_names(state)?;
+                        if !self.active_note_name.is_empty() {
+                            self.merge_if_needed(state)?;
+                        }
+                    }
                 }
             }
         }
@@ -274,7 +317,7 @@ impl Applet for NotesApplet {
                     .response;
                 if response.changed() {
                     self.active_note_name = self.active_note_name.trim().to_string();
-                    if let Err(_e) = self.open(self.active_note_name.clone(), state) {
+                    if let Err(_e) = self.open(&self.active_note_name.to_string(), state) {
                         self.active_note = String::default();
                         self.active_note_unsaved = String::default();
                     }

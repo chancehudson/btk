@@ -11,7 +11,7 @@ use egui_taffy::taffy::Point;
 use egui_taffy::taffy::prelude::*;
 
 use super::Applet;
-use crate::app_state::AppState;
+use crate::data::AppState;
 use crate::data::*;
 
 #[derive(Default)]
@@ -60,7 +60,7 @@ impl HomeApplet {
                 ..Default::default()
             })
             .add(|tui| {
-                if let Some(cloud_id) = state.local_data.active_cloud_id
+                if let Some(cloud_id) = state.active_cloud_id
                     && cloud.id() == &cloud_id
                 {
                     tui.label("active!");
@@ -123,16 +123,13 @@ impl Applet for HomeApplet {
                             tui.heading("Your encrypted clouds");
                             tui.ui(|ui| {
                                 if ui.button("+").clicked() {
-                                    state
-                                        .local_data
-                                        .create_cloud()
-                                        .expect("failed to create cloud");
+                                    state.create_cloud().expect("failed to create cloud");
                                     state.reload_clouds();
                                 }
                             });
                         });
                         tui.separator();
-                        for cloud in &state.local_data.sorted_clouds {
+                        for cloud in &state.sorted_clouds {
                             self.render_cloud_cell(cloud, tui, state);
                         }
                     });

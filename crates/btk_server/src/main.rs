@@ -70,6 +70,7 @@ async fn main() -> Result<()> {
                                 println!("error handling http req: {:?}", e);
                             }
                         });
+                        tokio::task::yield_now().await;
                     }
                     Err(e) => {
                         println!("http server errored: {:?}", e);

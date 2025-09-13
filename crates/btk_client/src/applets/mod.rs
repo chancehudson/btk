@@ -15,7 +15,7 @@ pub use settings::SettingsApplet;
 pub use tasks::TasksApplet;
 
 use crate::app::AppEvent;
-use crate::app_state::AppState;
+use crate::data::AppState;
 
 pub struct DefaultApplet;
 impl Applet for DefaultApplet {}
