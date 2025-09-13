@@ -97,7 +97,7 @@ impl NotesApplet {
                 self.active_note = new_active_note;
                 self.active_note_unsaved = merged;
             }
-            Err(e) => {
+            Err(_e) => {
                 println!("merge conflict in note! overwriting local changes");
                 self.active_note = new_active_note;
                 self.active_note_unsaved = self.active_note.clone();

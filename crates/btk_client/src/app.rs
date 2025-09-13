@@ -111,7 +111,7 @@ impl App {
         // on the web allow customizing the initial view
         if let Some(href) = webapp_href()? {
             let url = reqwest::Url::parse(&href)?;
-            for (key, val) in url.query_pairs() {
+            for (key, _val) in url.query_pairs() {
                 if key == "clouds" {
                     out.show_clouds_menu = true;
                 }

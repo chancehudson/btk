@@ -16,7 +16,7 @@ impl Applet for SettingsApplet {
         "Settings"
     }
 
-    fn handle_app_events(&mut self, events: &Vec<AppEvent>, state: &AppState) -> Result<()> {
+    fn handle_app_events(&mut self, events: &Vec<AppEvent>, _state: &AppState) -> Result<()> {
         for event in events {
             match event {
                 AppEvent::ActiveAppletChanged => {
@@ -25,7 +25,7 @@ impl Applet for SettingsApplet {
                 AppEvent::ActiveCloudChanged => {
                     self.new_remote_url = String::default();
                 }
-                AppEvent::RemoteCloudUpdate(cloud_id) => {
+                AppEvent::RemoteCloudUpdate(_cloud_id) => {
                     // nothing to handle
                 }
             }
@@ -61,8 +61,11 @@ impl Applet for SettingsApplet {
 
             ui.horizontal(|ui| {
                 ui.label("name:");
-                let mut name_label =
-                    EditableLabel::init(format!("{}-name", active_cloud.id_hex()), ui, &|label| {});
+                let mut name_label = EditableLabel::init(
+                    format!("{}-name", active_cloud.id_hex()),
+                    ui,
+                    &|_label| {},
+                );
                 if name_label.changed() {
                     let mut new_metadata = metadata.clone();
                     new_metadata.name = name_label.value.clone();
@@ -83,7 +86,7 @@ impl Applet for SettingsApplet {
                 let mut description_label = EditableLabel::init(
                     format!("{}-description", active_cloud.id_hex()),
                     ui,
-                    &|label| {},
+                    &|_label| {},
                 );
                 if description_label.changed() {
                     let mut new_metadata = metadata.clone();

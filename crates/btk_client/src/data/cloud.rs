@@ -7,7 +7,6 @@ use anyhow::Result;
 use chacha20::ChaCha20;
 use chacha20::cipher::KeyIvInit;
 use chacha20::cipher::StreamCipher;
-use ml_dsa::B32;
 use ml_dsa::KeyGen;
 use ml_dsa::MlDsa87;
 use ml_dsa::signature::Signer;

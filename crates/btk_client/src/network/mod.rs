@@ -12,8 +12,6 @@ pub use network_native::NetworkConnection;
 #[cfg(target_arch = "wasm32")]
 pub use network_wasm::NetworkConnection;
 
-pub const DEFAULT_SERVER_URL: &str = "ws://127.0.0.1:5001";
-
 /// Abstraction around a concrete network connection. Handles reconnect logic, send/receive,
 /// switching servers.
 #[derive(Default)]

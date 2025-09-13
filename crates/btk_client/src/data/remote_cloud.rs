@@ -13,23 +13,17 @@ use super::Cloud;
 /// collaboration among keyholders.
 #[derive(Clone)]
 pub struct RemoteCloud {
-    id: [u8; 32],
     http_url: String,
-    ws_url: String,
     // connection_maybe: Option<Arc<NetworkConnection>>,
-    latest_synced_index: Option<u64>,
     pub(crate) cloud: Arc<Cloud>,
     latest_confirmed_index: Arc<RwLock<Option<u64>>>,
 }
 
 impl RemoteCloud {
-    pub fn new(id: [u8; 32], ws_url: String, http_url: String, cloud: Arc<Cloud>) -> Self {
+    pub fn new(_id: [u8; 32], _ws_url: String, http_url: String, cloud: Arc<Cloud>) -> Self {
         let out = Self {
             // connection_maybe: None,
-            ws_url,
             http_url,
-            id,
-            latest_synced_index: None,
             cloud,
             latest_confirmed_index: Arc::new(RwLock::new(None)),
         };
@@ -85,7 +79,7 @@ impl RemoteCloud {
             } else if res.status() == StatusCode::NOT_FOUND {
                 sync_status_tx.send((*self.cloud.id(), format!("Broadcasting change {}", i)))?;
                 // send the mutation
-                let mutation = self.cloud.encrypt_tx(tx.clone(), i as u64)?;
+                let mutation = self.cloud.encrypt_tx(tx.clone(), i)?;
                 let url = base_url.join("/mutate")?;
                 let client = reqwest::Client::new();
                 let res = client

@@ -8,7 +8,6 @@ mod settings;
 mod tasks;
 
 pub use files::FilesApplet;
-pub use home::HomeApplet;
 pub use mail::MailApplet;
 pub use notes::NotesApplet;
 pub use settings::SettingsApplet;

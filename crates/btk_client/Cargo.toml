@@ -34,7 +34,6 @@ rand = { version = "0.9.2" }
 egui_taffy = "0.8.1"
 reqwest = "0.12.23"
 tokio_with_wasm = { version = "0.8.7", features = ["rt", "time"] }
-dashmap = "6.1.0"
 
 # For web builds
 [target.'cfg(target_arch = "wasm32")'.dependencies]

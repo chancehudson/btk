@@ -10,7 +10,6 @@ use serde::Serialize;
 use tiny_http::Header;
 use tiny_http::Method;
 use tiny_http::Request;
-use tiny_http::StatusCode;
 use url::Url;
 
 use super::network;
@@ -188,8 +187,8 @@ impl BTKServer {
                 // TODO: flood prevention
                 self.network_server.send(&socket_id, Response::Pong).await?;
             }
-            Action::MutateCloud(mutation) => {}
-            Action::AuthCloud(cloud_id, sig_bytes) => {
+            Action::MutateCloud(_mutation) => {}
+            Action::AuthCloud(_cloud_id, _sig_bytes) => {
                 unimplemented!();
             }
         }
