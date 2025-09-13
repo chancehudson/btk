@@ -176,12 +176,17 @@ impl AppState {
     /// encryption. A syntax for expressing queries
     /// (like MongoDB/SQL) can trivially be built around this.
     ///
-    pub fn create_cloud(&self) -> Result<Cloud> {
+    pub fn create_cloud(&self) -> Result<()> {
         let cloud = Cloud::new(Self::local_data_dir()?)?;
-        cloud.set_metadata(CloudMetadata::create())?;
+        let metadata = CloudMetadata::create();
+        cloud.set_metadata(metadata.clone())?;
         self.db
             .insert(CLOUD_KEYS_TABLE, cloud.id(), cloud.private_key())?;
-        Ok(cloud)
+        self.clouds
+            .write()
+            .unwrap()
+            .insert(*cloud.id(), (Arc::new(cloud), metadata));
+        Ok(())
     }
 
     /// Returns the new cloud id

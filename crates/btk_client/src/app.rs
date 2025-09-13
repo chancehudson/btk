@@ -311,7 +311,7 @@ impl App {
                     } else {
                         tui.label("No active cloud!");
                     }
-                    tui.label("right");
+                    tui.label("synchronizing...");
                 });
         });
     }
