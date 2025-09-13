@@ -39,7 +39,11 @@ impl RemoteCloud {
 
     /// A single synchronization tick. Should be a short lived task to advance the state of
     /// synchronization.
-    pub async fn tick(&self, events_tx: flume::Sender<AppEvent>) -> Result<()> {
+    pub async fn tick(
+        &self,
+        events_tx: flume::Sender<AppEvent>,
+        sync_status_tx: flume::Sender<([u8; 32], String)>,
+    ) -> Result<()> {
         let base_url = reqwest::Url::parse(&self.http_url)?;
         let journal = self.cloud.db.get_journal_transactions()?;
         for (i, tx) in journal.iter().enumerate() {
@@ -61,14 +65,20 @@ impl RemoteCloud {
                 if remote_tx.hash()? == tx.hash()? {
                     // println!("hashes match!");
                     *self.latest_confirmed_index.write().unwrap() = Some(i);
+                    sync_status_tx.send((
+                        *self.cloud.id(),
+                        format!("Confirmed {} of {}", i, journal.len()),
+                    ))?;
                     continue;
                 }
 
                 println!("cloud has diverged!");
+                sync_status_tx.send((*self.cloud.id(), format!("Diverged at change {}", i)))?;
                 // TODO: handle merge
 
                 return Ok(());
             } else if res.status() == StatusCode::NOT_FOUND {
+                sync_status_tx.send((*self.cloud.id(), format!("Broadcasting change {}", i)))?;
                 // send the mutation
                 let mutation = self.cloud.encrypt_tx(tx.clone(), i as u64)?;
                 let url = base_url.join("/mutate")?;
@@ -104,6 +114,10 @@ impl RemoteCloud {
 
         let mut current_index = journal.len() as u64;
         while remote_index > current_index {
+            sync_status_tx.send((
+                *self.cloud.id(),
+                format!("Downloading change {}", current_index),
+            ))?;
             // we're fully synced locally, now look for changes the server has but we don't
             let mut url = base_url.join("/mutation")?;
             url.set_query(Some(&format!(
@@ -119,10 +133,18 @@ impl RemoteCloud {
                 self.cloud.db.append_tx(&remote_tx)?;
                 events_tx.send(AppEvent::RemoteCloudUpdate(*self.cloud.id()))?;
             } else {
+                sync_status_tx.send((
+                    *self.cloud.id(),
+                    format!("Error downloading change {}", current_index),
+                ))?;
                 break;
             }
 
             current_index += 1;
+        }
+
+        if current_index == remote_index {
+            sync_status_tx.send((*self.cloud.id(), format!("Fully synchronized!")))?;
         }
 
         Ok(())

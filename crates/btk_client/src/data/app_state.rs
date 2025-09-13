@@ -32,6 +32,10 @@ const ACTIVE_CLOUD_KEY: [u8; 32] = [0; 32];
 pub struct AppState {
     pub pending_events: (flume::Sender<AppEvent>, flume::Receiver<AppEvent>),
     pub pending_requests: (flume::Sender<ActionRequest>, flume::Receiver<ActionRequest>),
+    pub sync_status: (
+        flume::Sender<([u8; 32], String)>,
+        flume::Receiver<([u8; 32], String)>,
+    ),
     /// Application database, exists outside of all clouds.
     db: Journal,
     /// Path where persistent application data may be stored.
@@ -69,6 +73,7 @@ impl AppState {
         Ok(Self {
             pending_events: flume::unbounded(),
             pending_requests: flume::unbounded(),
+            sync_status: flume::unbounded(),
             db: if let Some(data_dir) = Self::local_data_dir()? {
                 redb::Database::create(data_dir.join("local_data.redb"))?.into()
             } else {
@@ -90,6 +95,7 @@ impl AppState {
 
         let remote_clouds = self.remote_clouds.clone();
         let events_tx = self.pending_events.0.clone();
+        let sync_status_tx = self.sync_status.0.clone();
         tokio::spawn(async move {
             loop {
                 let remotes = remote_clouds
@@ -99,7 +105,7 @@ impl AppState {
                     .cloned()
                     .collect::<Vec<_>>();
                 for remote in remotes {
-                    if let Err(e) = remote.tick(events_tx.clone()).await {
+                    if let Err(e) = remote.tick(events_tx.clone(), sync_status_tx.clone()).await {
                         println!("Error ticking remote! {:?}", e);
                     }
                 }

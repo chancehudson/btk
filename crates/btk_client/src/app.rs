@@ -1,5 +1,6 @@
+use std::collections::HashMap;
+
 use anyhow::Result;
-use eframe::glow::TESS_CONTROL_TEXTURE;
 use egui::Pos2;
 use egui::Rect;
 use egui::Vec2;
@@ -38,6 +39,7 @@ pub struct App {
     applets: IndexMap<String, Box<dyn Applet>>,
     showing_import: bool,
     import_key: String,
+    sync_status: HashMap<[u8; 32], String>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -103,6 +105,7 @@ impl App {
             show_clouds_menu: false,
             showing_import: false,
             import_key: String::default(),
+            sync_status: HashMap::default(),
         };
 
         // on the web allow customizing the initial view
@@ -322,12 +325,16 @@ impl App {
                     ..Default::default()
                 })
                 .show(|tui| {
-                    if let Some((_cloud, metadata)) = self.state.active_cloud() {
+                    if let Some((cloud, metadata)) = self.state.active_cloud() {
                         tui.label(&metadata.name);
+                        if let Some(status) = self.sync_status.get(cloud.id()) {
+                            tui.label(status);
+                        } else {
+                            tui.label("initializing...");
+                        }
                     } else {
                         tui.label("No active cloud!");
                     }
-                    tui.label("synchronizing...");
                 });
         });
     }
@@ -342,6 +349,10 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         ctx.request_repaint_after(Duration::from_secs(1));
         let render_start = Instant::now();
+
+        for (cloud_id, status) in self.state.sync_status.1.drain() {
+            self.sync_status.insert(cloud_id, status);
+        }
 
         let pending_events = self.state.pending_events.1.drain().collect();
         for applet in self.applets.values_mut() {
