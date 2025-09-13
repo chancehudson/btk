@@ -19,7 +19,7 @@ pub struct RemoteCloud {
     // connection_maybe: Option<Arc<NetworkConnection>>,
     latest_synced_index: Option<u64>,
     pub(crate) cloud: Arc<Cloud>,
-    latest_confirmed_index: Arc<RwLock<Option<usize>>>,
+    latest_confirmed_index: Arc<RwLock<Option<u64>>>,
 }
 
 impl RemoteCloud {
@@ -45,10 +45,15 @@ impl RemoteCloud {
         sync_status_tx: flume::Sender<([u8; 32], String)>,
     ) -> Result<()> {
         let base_url = reqwest::Url::parse(&self.http_url)?;
-        let journal = self.cloud.db.get_journal_transactions()?;
-        for (i, tx) in journal.iter().enumerate() {
+        let journal_len = self.cloud.db.journal_tx_len()?;
+        for i in 0..journal_len {
+            let tx = self.cloud.db.journal_tx_by_index(i)?;
+            if tx.is_none() {
+                anyhow::bail!("unable to find transaction in journal!");
+            }
+            let tx = tx.unwrap();
             if let Some(confirmed_index) = self.latest_confirmed_index.read().unwrap().clone() {
-                if confirmed_index >= i {
+                if confirmed_index as u64 >= i {
                     continue;
                 }
             }
@@ -60,14 +65,14 @@ impl RemoteCloud {
             if res.status().is_success() {
                 let mutation = Bytes::from(res.bytes().await?.to_vec()).parse::<Mutation>()?;
                 let (remote_tx, index) = self.cloud.decrypt_tx(mutation)?;
-                assert_eq!(index, i as u64, "index mismatch from remote");
+                assert_eq!(index, i, "index mismatch from remote");
 
                 if remote_tx.hash()? == tx.hash()? {
                     // println!("hashes match!");
                     *self.latest_confirmed_index.write().unwrap() = Some(i);
                     sync_status_tx.send((
                         *self.cloud.id(),
-                        format!("Confirmed {} of {}", i, journal.len()),
+                        format!("Confirmed {} of {}", i, journal_len),
                     ))?;
                     continue;
                 }
@@ -112,7 +117,7 @@ impl RemoteCloud {
             return Ok(());
         };
 
-        let mut current_index = journal.len() as u64;
+        let mut current_index = journal_len;
         while remote_index > current_index {
             sync_status_tx.send((
                 *self.cloud.id(),
@@ -131,6 +136,7 @@ impl RemoteCloud {
                 let mutation = Bytes::from(res.bytes().await?.to_vec()).parse::<Mutation>()?;
                 let (remote_tx, _index) = self.cloud.decrypt_tx(mutation)?;
                 self.cloud.db.append_tx(&remote_tx)?;
+                *self.latest_confirmed_index.write().unwrap() = Some(current_index);
                 events_tx.send(AppEvent::RemoteCloudUpdate(*self.cloud.id()))?;
             } else {
                 sync_status_tx.send((
@@ -144,7 +150,10 @@ impl RemoteCloud {
         }
 
         if current_index == remote_index {
-            sync_status_tx.send((*self.cloud.id(), format!("Fully synchronized!")))?;
+            sync_status_tx.send((
+                *self.cloud.id(),
+                format!("Fully synchronized! ({}/{})", current_index, remote_index),
+            ))?;
         }
 
         Ok(())
