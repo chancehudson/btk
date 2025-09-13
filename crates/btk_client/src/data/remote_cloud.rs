@@ -102,7 +102,6 @@ impl RemoteCloud {
             return Ok(());
         };
 
-        let mut has_new_tx = false;
         let mut current_index = journal.len() as u64;
         while remote_index > current_index {
             // we're fully synced locally, now look for changes the server has but we don't
@@ -118,16 +117,12 @@ impl RemoteCloud {
                 let mutation = Bytes::from(res.bytes().await?.to_vec()).parse::<Mutation>()?;
                 let (remote_tx, _index) = self.cloud.decrypt_tx(mutation)?;
                 self.cloud.db.append_tx(&remote_tx)?;
-                has_new_tx = true;
+                events_tx.send(AppEvent::RemoteCloudUpdate(*self.cloud.id()))?;
             } else {
                 break;
             }
 
             current_index += 1;
-        }
-
-        if has_new_tx {
-            events_tx.send(AppEvent::RemoteCloudUpdate(*self.cloud.id()))?;
         }
 
         Ok(())

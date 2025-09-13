@@ -37,6 +37,21 @@ pub struct App {
     import_key: String,
 }
 
+#[cfg(target_arch = "wasm32")]
+fn webapp_href() -> Result<Option<String>> {
+    if let Some(window) = web_sys::window() {
+        let location = window.location();
+        Ok(location.href().ok())
+    } else {
+        Ok(None)
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn webapp_href() -> Result<Option<String>> {
+    Ok(None)
+}
+
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Result<Self> {
         // setup egui/taffy rendering stuff
@@ -72,7 +87,7 @@ impl App {
             applets.insert(applet.name().into(), applet);
         }
 
-        Ok(Self {
+        let mut out = Self {
             state,
             active_applet: applets
                 .first()
@@ -85,7 +100,21 @@ impl App {
             show_clouds_menu: false,
             showing_import: false,
             import_key: String::default(),
-        })
+        };
+
+        // on the web allow customizing the initial view
+        if let Some(href) = webapp_href()? {
+            let url = reqwest::Url::parse(&href)?;
+            for (key, val) in url.query_pairs() {
+                if key == "clouds" {
+                    out.show_clouds_menu = true;
+                }
+                if key == "import" {
+                    out.showing_import = true;
+                }
+            }
+        }
+        Ok(out)
     }
 }
 
@@ -232,6 +261,12 @@ impl App {
             ui.label("enter your private key");
             let input = ui.text_edit_singleline(&mut self.import_key);
 
+            if self.import_key.len() == 64 {
+                input.show_tooltip_ui(|ui| {
+                    ui.label("press enter to import");
+                });
+            }
+
             if input.lost_focus() && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
                 match self.state.import_cloud(&self.import_key) {
                     Ok(cloud_id) => {
@@ -243,6 +278,8 @@ impl App {
                     Err(_) => {}
                 }
             }
+
+            input.request_focus();
             if ui.button("cancel").clicked() {
                 self.showing_import = false;
                 self.import_key = String::default();
