@@ -1,5 +1,8 @@
 use anyhow::Result;
+use eframe::glow::TESS_CONTROL_TEXTURE;
+use egui::Pos2;
 use egui::Rect;
+use egui::Vec2;
 use egui_taffy::TuiBuilderLogic;
 use egui_taffy::taffy::Overflow;
 use egui_taffy::taffy::Point;
@@ -257,34 +260,47 @@ impl App {
     }
 
     fn render_import_view(&mut self, ctx: &egui::Context) {
-        egui::Window::new("import cloud").show(ctx, |ui| {
-            ui.label("enter your private key");
-            let input = ui.text_edit_singleline(&mut self.import_key);
+        let viewport_size = ctx.screen_rect().size();
+        let window_size = Vec2::new(300.0, 300.0);
+        egui::Window::new("import cloud")
+            .default_size(window_size)
+            .default_pos(Pos2::new(
+                (viewport_size.x - window_size.x) * 0.5,
+                (viewport_size.y - window_size.y) * 0.5,
+            ))
+            .collapsible(false)
+            .show(ctx, |ui| {
+                let text_edit = egui::TextEdit::singleline(&mut self.import_key)
+                    .hint_text("paste your private key here")
+                    .desired_width(window_size.x);
+                let input = ui.add(text_edit);
 
-            if self.import_key.len() == 64 {
-                input.show_tooltip_ui(|ui| {
-                    ui.label("press enter to import");
-                });
-            }
+                if self.import_key.len() == 64 {
+                    input.show_tooltip_ui(|ui| {
+                        ui.label("press enter to import");
+                    });
+                }
 
-            if input.lost_focus() && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
-                match self.state.import_cloud(&self.import_key) {
-                    Ok(cloud_id) => {
-                        self.state.load_clouds().unwrap();
-                        self.state.set_active_cloud(cloud_id).unwrap();
+                if input.lost_focus() && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+                    match self.state.import_cloud(&self.import_key) {
+                        Ok(cloud_id) => {
+                            self.state.load_clouds().unwrap();
+                            self.state.set_active_cloud(cloud_id).unwrap();
+                            self.showing_import = false;
+                            self.import_key = String::default();
+                        }
+                        Err(_) => {}
+                    }
+                }
+
+                input.request_focus();
+                ui.vertical_centered(|ui| {
+                    if ui.button("cancel").clicked() {
                         self.showing_import = false;
                         self.import_key = String::default();
                     }
-                    Err(_) => {}
-                }
-            }
-
-            input.request_focus();
-            if ui.button("cancel").clicked() {
-                self.showing_import = false;
-                self.import_key = String::default();
-            }
-        });
+                });
+            });
     }
 
     fn render_footer(&mut self, ctx: &egui::Context) {
