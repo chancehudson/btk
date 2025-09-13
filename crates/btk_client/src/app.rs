@@ -272,6 +272,7 @@ impl App {
                 (viewport_size.y - window_size.y) * 0.5,
             ))
             .collapsible(false)
+            .resizable(false)
             .show(ctx, |ui| {
                 let text_edit = egui::TextEdit::singleline(&mut self.import_key)
                     .hint_text("paste your private key here")
@@ -282,6 +283,11 @@ impl App {
                     input.show_tooltip_ui(|ui| {
                         ui.label("press enter to import");
                     });
+                }
+
+                if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                    self.showing_import = false;
+                    self.import_key = String::default();
                 }
 
                 if input.lost_focus() && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {

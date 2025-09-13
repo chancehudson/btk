@@ -47,16 +47,16 @@ impl RemoteCloud {
         let base_url = reqwest::Url::parse(&self.http_url)?;
         let journal_len = self.cloud.db.journal_tx_len()?;
         for i in 0..journal_len {
+            if let Some(confirmed_index) = self.latest_confirmed_index.read().unwrap().clone() {
+                if confirmed_index >= i {
+                    continue;
+                }
+            }
             let tx = self.cloud.db.journal_tx_by_index(i)?;
             if tx.is_none() {
                 anyhow::bail!("unable to find transaction in journal!");
             }
             let tx = tx.unwrap();
-            if let Some(confirmed_index) = self.latest_confirmed_index.read().unwrap().clone() {
-                if confirmed_index as u64 >= i {
-                    continue;
-                }
-            }
             // load the corresponding mutation from the server
             let mut url = base_url.join("/mutation")?;
             url.set_query(Some(&format!("cloud_id={}&index={i}", self.cloud.id_hex())));
