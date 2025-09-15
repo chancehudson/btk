@@ -70,7 +70,7 @@ impl App {
         });
 
         // construct application state
-        let mut state = AppState::new()?;
+        let mut state = AppState::new(cc.egui_ctx.clone())?;
 
         state.init()?;
 

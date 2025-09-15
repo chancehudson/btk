@@ -15,6 +15,7 @@ use super::Cloud;
 /// collaboration among keyholders.
 #[derive(Clone)]
 pub struct RemoteCloud {
+    ctx: egui::Context,
     http_url: String,
     ws_url: String,
     connection_maybe: Option<Arc<NetworkConnection>>,
@@ -24,8 +25,9 @@ pub struct RemoteCloud {
 }
 
 impl RemoteCloud {
-    pub fn new(_id: [u8; 32], ws_url: String, http_url: String, cloud: Arc<Cloud>) -> Self {
+    pub fn new(ws_url: String, http_url: String, cloud: Arc<Cloud>, ctx: egui::Context) -> Self {
         let mut out = Self {
+            ctx,
             connection_maybe: None,
             ws_url,
             http_url,
@@ -70,6 +72,7 @@ impl RemoteCloud {
                 if remote_tx.hash()? == tx.hash()? {
                     // println!("hashes match!");
                     *self.latest_confirmed_index.write().unwrap() = Some(i);
+                    self.ctx.request_repaint();
                     sync_status_tx.send((
                         *self.cloud.id(),
                         format!("Confirmed {} of {}", i, journal_len),
@@ -78,11 +81,13 @@ impl RemoteCloud {
                 }
 
                 println!("cloud has diverged!");
+                self.ctx.request_repaint();
                 sync_status_tx.send((*self.cloud.id(), format!("Diverged at change {}", i)))?;
                 // TODO: handle merge
 
                 return Ok(());
             } else if res.status() == StatusCode::FAILED_DEPENDENCY {
+                self.ctx.request_repaint();
                 sync_status_tx.send((*self.cloud.id(), format!("Broadcasting change {}", i)))?;
                 // send the mutation
                 let mutation = self.cloud.encrypt_tx(tx.clone(), i)?;
@@ -125,6 +130,7 @@ impl RemoteCloud {
 
         let mut current_index = journal_len;
         while remote_index > current_index {
+            self.ctx.request_repaint();
             sync_status_tx.send((
                 *self.cloud.id(),
                 format!("Downloading change {}", current_index),
@@ -145,6 +151,7 @@ impl RemoteCloud {
                 *self.latest_confirmed_index.write().unwrap() = Some(current_index);
                 events_tx.send(AppEvent::RemoteCloudUpdate(*self.cloud.id()))?;
             } else {
+                self.ctx.request_repaint();
                 sync_status_tx.send((
                     *self.cloud.id(),
                     format!("Error downloading change {}", current_index),
@@ -156,6 +163,7 @@ impl RemoteCloud {
         }
 
         if current_index == remote_index {
+            self.ctx.request_repaint();
             sync_status_tx.send((
                 *self.cloud.id(),
                 format!("Fully synchronized! ({}/{})", current_index, remote_index),

@@ -30,6 +30,7 @@ const ACTIVE_CLOUD_KEY: [u8; 32] = [0; 32];
 ///
 /// A state object that is accessible in all applets.
 pub struct AppState {
+    ctx: egui::Context,
     pub pending_events: (flume::Sender<AppEvent>, flume::Receiver<AppEvent>),
     pub pending_requests: (flume::Sender<ActionRequest>, flume::Receiver<ActionRequest>),
     pub sync_status: (
@@ -68,8 +69,9 @@ impl AppState {
         self.pending_requests.1.drain().collect()
     }
 
-    pub fn new() -> Result<Self> {
+    pub fn new(ctx: egui::Context) -> Result<Self> {
         Ok(Self {
+            ctx,
             pending_events: flume::unbounded(),
             pending_requests: flume::unbounded(),
             sync_status: flume::unbounded(),
@@ -140,10 +142,10 @@ impl AppState {
                 self.remote_clouds.write().unwrap().insert(
                     *cloud.id(),
                     RemoteCloud::new(
-                        *cloud.id(),
                         "wss://btk_worker.jchancehud.workers.dev".to_string(),
                         "https://btk_worker.jchancehud.workers.dev".to_string(),
                         cloud.clone(),
+                        self.ctx.clone(),
                     ),
                 );
             }
