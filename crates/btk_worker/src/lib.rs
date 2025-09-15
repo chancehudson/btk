@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::RwLock;
 
 use anondb::Bytes;
@@ -7,14 +6,16 @@ use anondb::Journal;
 use network_common::Mutation;
 use worker::*;
 
-const MUTATION_COUNT_TABLE_NAME: &str = "mutation_counts";
-
 fn mutation_key(cloud_id: &[u8; 32], index: u32) -> String {
-    format!("cloud-{}-{}", hex::encode(cloud_id), index)
+    format!("mutation-{}-{}", index, hex::encode(cloud_id))
 }
 
 fn mutation_count_key(cloud_id: &[u8; 32]) -> String {
-    format!("cloud-{}-count", hex::encode(cloud_id))
+    format!("count-{}", hex::encode(cloud_id))
+}
+
+fn cloud_pubkey_key(cloud_id: &[u8; 32]) -> String {
+    format!("pubkey-{}", hex::encode(cloud_id))
 }
 
 #[durable_object]
@@ -28,9 +29,9 @@ pub struct StorageCoordinator {
 }
 
 impl StorageCoordinator {
-    pub async fn get_public_key(&self, hash: [u8; 32]) -> Result<Option<Vec<u8>>> {
+    pub async fn get_public_key(&self, cloud_id: &[u8; 32]) -> Result<Option<Vec<u8>>> {
         let bucket = self.env.bucket("btk_storage")?;
-        let obj = bucket.get(hex::encode(hash)).execute().await?;
+        let obj = bucket.get(cloud_pubkey_key(&cloud_id)).execute().await?;
         if obj.is_none() {
             return Ok(None);
         }
@@ -187,7 +188,7 @@ impl DurableObject for StorageCoordinator {
                 let public_key = if let Some(public_key) = &mutation.public_key {
                     public_key.clone()
                 } else if let Some(public_key) =
-                    self.get_public_key(mutation.public_key_hash).await?
+                    self.get_public_key(&mutation.public_key_hash).await?
                 {
                     public_key
                 } else {
@@ -209,7 +210,7 @@ impl DurableObject for StorageCoordinator {
 
                 if mutation.index == 0 {
                     bucket
-                        .put(hex::encode(mutation.public_key_hash), public_key)
+                        .put(cloud_pubkey_key(&cloud_id), public_key)
                         .execute()
                         .await?;
                 }
