@@ -1,0 +1,19 @@
+name = "btk_worker"
+main = "build/worker/shim.mjs"
+compatibility_date = "2025-09-15"
+
+[[r2_buckets]]
+binding = "btk_storage"
+bucket_name = "btk-storage-prerelease"
+
+[durable_objects]
+bindings = [
+  { name = "BTK_PRERELEASE", class_name = "StorageCoordinator" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["StorageCoordinator"]
+
+[build]
+command = "cargo install -q worker-build && worker-build --release"

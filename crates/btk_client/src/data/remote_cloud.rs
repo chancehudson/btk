@@ -1,4 +1,5 @@
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+use std::sync::RwLock;
 
 use anondb::Bytes;
 use anyhow::Result;
@@ -6,6 +7,7 @@ use network_common::*;
 use reqwest::StatusCode;
 
 use crate::app::AppEvent;
+use crate::network::NetworkConnection;
 
 use super::Cloud;
 
@@ -14,20 +16,24 @@ use super::Cloud;
 #[derive(Clone)]
 pub struct RemoteCloud {
     http_url: String,
-    // connection_maybe: Option<Arc<NetworkConnection>>,
+    ws_url: String,
+    connection_maybe: Option<Arc<NetworkConnection>>,
     pub(crate) cloud: Arc<Cloud>,
     latest_confirmed_index: Arc<RwLock<Option<u64>>>,
+    initial_sync_complete: Arc<RwLock<bool>>,
 }
 
 impl RemoteCloud {
-    pub fn new(_id: [u8; 32], _ws_url: String, http_url: String, cloud: Arc<Cloud>) -> Self {
-        let out = Self {
-            // connection_maybe: None,
+    pub fn new(_id: [u8; 32], ws_url: String, http_url: String, cloud: Arc<Cloud>) -> Self {
+        let mut out = Self {
+            connection_maybe: None,
+            ws_url,
             http_url,
             cloud,
             latest_confirmed_index: Arc::new(RwLock::new(None)),
+            initial_sync_complete: Arc::new(RwLock::new(false)),
         };
-        // out.reconnect_if_needed();
+        out.reconnect_if_needed();
         out
     }
 
@@ -76,11 +82,12 @@ impl RemoteCloud {
                 // TODO: handle merge
 
                 return Ok(());
-            } else if res.status() == StatusCode::NOT_FOUND {
+            } else if res.status() == StatusCode::FAILED_DEPENDENCY {
                 sync_status_tx.send((*self.cloud.id(), format!("Broadcasting change {}", i)))?;
                 // send the mutation
                 let mutation = self.cloud.encrypt_tx(tx.clone(), i)?;
-                let url = base_url.join("/mutate")?;
+                let mut url = base_url.join("/mutate")?;
+                url.set_query(Some(&format!("cloud_id={}", self.cloud.id_hex(),)));
                 let client = reqwest::Client::new();
                 let res = client
                     .post(url)
@@ -92,13 +99,17 @@ impl RemoteCloud {
                     *self.latest_confirmed_index.write().unwrap() = Some(i);
                     continue;
                 } else {
-                    println!("failed to send mutation");
+                    println!("failed to send mutation: {:?}", res.status());
                     return Ok(());
                 }
             } else {
-                println!("unknown status from get request");
+                println!("unknown status from get request {:?}", res.status());
                 break;
             }
+        }
+
+        if self.receive()?.len() == 0 && *self.initial_sync_complete.read().unwrap() {
+            return Ok(());
         }
 
         let mut url = base_url.join("/state")?;
@@ -110,6 +121,7 @@ impl RemoteCloud {
             println!("failed to get server state");
             return Ok(());
         };
+        *self.initial_sync_complete.write().unwrap() = true;
 
         let mut current_index = journal_len;
         while remote_index > current_index {
@@ -153,36 +165,38 @@ impl RemoteCloud {
         Ok(())
     }
 
-    // pub fn reconnect_if_needed(&mut self) {
-    //     if !self.is_connected() {
-    //         self.connection_maybe = Some(Arc::new(NetworkConnection::attempt_connection(
-    //             self.ws_url.clone(),
-    //         )));
-    //     }
-    // }
-    //
-    // pub fn is_connected(&self) -> bool {
-    //     if let Some(connection) = &self.connection_maybe {
-    //         connection.is_open().is_ok()
-    //     } else {
-    //         false
-    //     }
-    // }
-    //
-    // pub fn send(&self, action: Action) -> Result<()> {
-    //     if let Some(connection) = &self.connection_maybe {
-    //         connection.write_connection(action);
-    //         Ok(())
-    //     } else {
-    //         anyhow::bail!("NetworkManager: attempted to send without a connection");
-    //     }
-    // }
-    //
-    // pub fn receive(&self) -> Result<Vec<Response>> {
-    //     if let Some(connection) = &self.connection_maybe {
-    //         Ok(connection.read_connection())
-    //     } else {
-    //         anyhow::bail!("NetworkManager: attempted to receive without a connection");
-    //     }
-    // }
+    pub fn reconnect_if_needed(&mut self) {
+        if !self.is_connected() {
+            let mut full_url = reqwest::Url::parse(&self.ws_url).expect("failed to parse ws url");
+            full_url.set_query(Some(&format!("cloud_id={}", self.cloud.id_hex(),)));
+            self.connection_maybe = Some(Arc::new(NetworkConnection::attempt_connection(
+                full_url.to_string(),
+            )));
+        }
+    }
+
+    pub fn is_connected(&self) -> bool {
+        if let Some(connection) = &self.connection_maybe {
+            connection.is_open().is_ok()
+        } else {
+            false
+        }
+    }
+
+    pub fn send(&self, action: Action) -> Result<()> {
+        if let Some(connection) = &self.connection_maybe {
+            connection.write_connection(action);
+            Ok(())
+        } else {
+            anyhow::bail!("NetworkManager: attempted to send without a connection");
+        }
+    }
+
+    pub fn receive(&self) -> Result<Vec<Response>> {
+        if let Some(connection) = &self.connection_maybe {
+            Ok(connection.read_connection())
+        } else {
+            anyhow::bail!("NetworkManager: attempted to receive without a connection");
+        }
+    }
 }

@@ -1,0 +1,19 @@
+[package]
+name = "btk_worker"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow = "1"
+
+worker = { version = "0.6.1", features = ["http"] }
+worker-macros = { version = "0.6", features = ["http"] }
+console_error_panic_hook = "0.1.7"
+wasm-bindgen = "0.2.101"
+hex = "0.4"
+
+anondb = { workspace = true }
+network_common = { path = "../network_common" }

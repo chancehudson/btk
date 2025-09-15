@@ -83,8 +83,8 @@ pub struct BTKServer {
 impl BTKServer {
     pub async fn new() -> Result<Self> {
         Ok(Self {
-            // db: redb::Database::create("./data.redb")?.into(),
-            db: Journal::in_memory(None)?,
+            db: redb::Database::create("/data.redb")?.into(),
+            // db: Journal::in_memory(None)?,
             network_server: network::Server::new().await?,
         })
     }
@@ -132,11 +132,10 @@ impl BTKServer {
                 if let Some(mutation) = self.db.get::<u64, Mutation>(&table_name, &index.into())? {
                     return req.respond(200, Some(mutation));
                 } else {
-                    return req.respond_empty(404);
+                    return req.respond_empty(424);
                 }
             }
             (Method::Post, "/mutate") => {
-                println!("receiving mutation");
                 let mutation = Bytes::from(&req.body).parse::<Mutation>()?;
                 let table_name = hex::encode(mutation.public_key_hash);
                 let public_key = if let Some(public_key) = &mutation.public_key {

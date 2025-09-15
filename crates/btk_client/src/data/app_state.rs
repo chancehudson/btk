@@ -141,8 +141,8 @@ impl AppState {
                     *cloud.id(),
                     RemoteCloud::new(
                         *cloud.id(),
-                        "ws://127.0.0.1:5001".to_string(),
-                        "http://127.0.0.1:8000".to_string(),
+                        "wss://btk_worker.jchancehud.workers.dev".to_string(),
+                        "https://btk_worker.jchancehud.workers.dev".to_string(),
                         cloud.clone(),
                     ),
                 );
