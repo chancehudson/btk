@@ -39,7 +39,6 @@ pub struct AppState {
     /// Application database, exists outside of all clouds.
     db: Journal,
     /// Path where persistent application data may be stored.
-    pub local_data_dir: Option<PathBuf>,
     pub clouds: RwLock<HashMap<[u8; 32], (Arc<Cloud>, CloudMetadata)>>,
     pub remote_clouds: Arc<RwLock<HashMap<[u8; 32], RemoteCloud>>>,
     pub sorted_clouds: Vec<(Arc<Cloud>, CloudMetadata)>,
@@ -79,7 +78,6 @@ impl AppState {
             } else {
                 Journal::in_memory(None)?
             },
-            local_data_dir: Self::local_data_dir()?,
             clouds: RwLock::new(HashMap::default()),
             active_cloud_id: None,
             sorted_clouds: Vec::default(),
