@@ -3,11 +3,12 @@ use std::sync::RwLock;
 
 use anondb::Bytes;
 use anyhow::Result;
-use network_common::*;
 use reqwest::StatusCode;
+use web_time::Instant;
 
 use crate::app::AppEvent;
 use crate::network::NetworkConnection;
+use network_common::*;
 
 use super::Cloud;
 
@@ -18,25 +19,25 @@ pub struct RemoteCloud {
     ctx: egui::Context,
     http_url: String,
     ws_url: String,
-    connection_maybe: Option<Arc<NetworkConnection>>,
+    connection_maybe: Arc<RwLock<Option<NetworkConnection>>>,
     pub(crate) cloud: Arc<Cloud>,
     latest_confirmed_index: Arc<RwLock<Option<u64>>>,
     initial_sync_complete: Arc<RwLock<bool>>,
+    last_keepalive: Arc<RwLock<Instant>>,
 }
 
 impl RemoteCloud {
     pub fn new(ws_url: String, http_url: String, cloud: Arc<Cloud>, ctx: egui::Context) -> Self {
-        let mut out = Self {
+        Self {
             ctx,
-            connection_maybe: None,
+            connection_maybe: Arc::new(RwLock::new(None)),
             ws_url,
             http_url,
             cloud,
             latest_confirmed_index: Arc::new(RwLock::new(None)),
             initial_sync_complete: Arc::new(RwLock::new(false)),
-        };
-        out.reconnect_if_needed();
-        out
+            last_keepalive: Arc::new(RwLock::new(Instant::now())),
+        }
     }
 
     /// A single synchronization tick. Should be a short lived task to advance the state of
@@ -46,6 +47,16 @@ impl RemoteCloud {
         events_tx: flume::Sender<AppEvent>,
         sync_status_tx: flume::Sender<([u8; 32], String)>,
     ) -> Result<()> {
+        self.reconnect_if_needed();
+        if Instant::now()
+            .duration_since(*self.last_keepalive.read().unwrap())
+            .as_secs()
+            > 20
+        {
+            *self.last_keepalive.write().unwrap() = Instant::now();
+            self.send(Action::Ping)?;
+        }
+
         let base_url = reqwest::Url::parse(&self.http_url)?;
         let journal_len = self.cloud.db.journal_tx_len()?;
         for i in 0..journal_len {
@@ -113,7 +124,20 @@ impl RemoteCloud {
             }
         }
 
-        if self.receive()?.len() == 0 && *self.initial_sync_complete.read().unwrap() {
+        if self
+            .receive()?
+            .iter()
+            .filter(|v| !matches!(v, Response::Pong))
+            .collect::<Vec<_>>()
+            .len()
+            == 0
+            && *self.initial_sync_complete.read().unwrap()
+        {
+            self.ctx.request_repaint();
+            sync_status_tx.send((
+                *self.cloud.id(),
+                format!("Fully synchronized! ({}/{})", journal_len, journal_len),
+            ))?;
             return Ok(());
         }
 
@@ -173,18 +197,18 @@ impl RemoteCloud {
         Ok(())
     }
 
-    pub fn reconnect_if_needed(&mut self) {
+    pub fn reconnect_if_needed(&self) {
         if !self.is_connected() {
             let mut full_url = reqwest::Url::parse(&self.ws_url).expect("failed to parse ws url");
             full_url.set_query(Some(&format!("cloud_id={}", self.cloud.id_hex(),)));
-            self.connection_maybe = Some(Arc::new(NetworkConnection::attempt_connection(
-                full_url.to_string(),
-            )));
+            *self.connection_maybe.write().unwrap() =
+                Some(NetworkConnection::attempt_connection(full_url.to_string()));
+            *self.last_keepalive.write().unwrap() = Instant::now();
         }
     }
 
     pub fn is_connected(&self) -> bool {
-        if let Some(connection) = &self.connection_maybe {
+        if let Some(connection) = &*self.connection_maybe.read().unwrap() {
             connection.is_open().is_ok()
         } else {
             false
@@ -192,7 +216,7 @@ impl RemoteCloud {
     }
 
     pub fn send(&self, action: Action) -> Result<()> {
-        if let Some(connection) = &self.connection_maybe {
+        if let Some(connection) = &*self.connection_maybe.read().unwrap() {
             connection.write_connection(action);
             Ok(())
         } else {
@@ -201,7 +225,7 @@ impl RemoteCloud {
     }
 
     pub fn receive(&self) -> Result<Vec<Response>> {
-        if let Some(connection) = &self.connection_maybe {
+        if let Some(connection) = &*self.connection_maybe.read().unwrap() {
             Ok(connection.read_connection())
         } else {
             anyhow::bail!("NetworkManager: attempted to receive without a connection");

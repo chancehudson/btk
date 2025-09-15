@@ -24,8 +24,8 @@ pub struct StorageCoordinator {
     db: Journal,
     mutation_count_lock: RwLock<Option<u32>>,
     authed_listeners: RwLock<Vec<WebSocket>>,
-    state: State,
     env: Env,
+    state: State,
 }
 
 impl StorageCoordinator {
@@ -76,10 +76,15 @@ impl DurableObject for StorageCoordinator {
         Self {
             db: Journal::in_memory(None).expect("failed to init anondb"),
             mutation_count_lock: RwLock::new(None),
-            state,
             env,
-            authed_listeners: RwLock::new(Vec::default()),
+            authed_listeners: RwLock::new(state.get_websockets()),
+            state,
         }
+    }
+
+    async fn websocket_error(&self, ws: WebSocket, _error: Error) -> Result<()> {
+        self.authed_listeners.write().unwrap().retain(|v| v != &ws);
+        Ok(())
     }
 
     async fn websocket_close(
@@ -95,13 +100,11 @@ impl DurableObject for StorageCoordinator {
 
     async fn websocket_message(
         &self,
-        ws: WebSocket,
+        _ws: WebSocket,
         message: WebSocketIncomingMessage,
     ) -> Result<()> {
         match message {
-            WebSocketIncomingMessage::String(_) => {
-                ws.send_with_str("pong")?;
-            }
+            WebSocketIncomingMessage::String(_) => {}
             WebSocketIncomingMessage::Binary(_bytes) => {}
         }
         Ok(())
@@ -123,6 +126,7 @@ impl DurableObject for StorageCoordinator {
 
         let headers = Headers::new();
         headers.set("Access-Control-Allow-Origin", "*")?;
+        headers.set("Access-Control-Allow-Methods", "*")?;
 
         // build the url query into a usable format
         let mut query: HashMap<String, String> = HashMap::default();
@@ -137,11 +141,11 @@ impl DurableObject for StorageCoordinator {
                     match hex::decode_to_slice(cloud_id_str.to_string(), &mut out) {
                         Ok(_) => out,
                         Err(_) => {
-                            return Ok(Response::empty()?.with_status(400));
+                            return Ok(Response::empty()?.with_status(400).with_headers(headers));
                         }
                     }
                 } else {
-                    return Ok(Response::empty()?.with_status(400));
+                    return Ok(Response::empty()?.with_status(400).with_headers(headers));
                 };
                 let count = self.mutation_count(&cloud_id).await?;
                 Ok(Response::from_bytes(
@@ -157,22 +161,23 @@ impl DurableObject for StorageCoordinator {
                     match hex::decode_to_slice(cloud_id_str.to_string(), &mut out) {
                         Ok(_) => out,
                         Err(_) => {
-                            return Ok(Response::empty()?.with_status(400));
+                            return Ok(Response::empty()?.with_status(400).with_headers(headers));
                         }
                     }
                 } else {
-                    return Ok(Response::empty()?.with_status(400));
+                    return Ok(Response::empty()?.with_status(400).with_headers(headers));
                 };
 
                 let index = if let Some(index_str) = query.get("index") {
                     u32::from_str_radix(&index_str.to_string(), 10)
                         .map_err(|_| "failed to parse index")?
                 } else {
-                    return Ok(Response::empty()?.with_status(400));
+                    return Ok(Response::empty()?.with_status(400).with_headers(headers));
                 };
                 let mutation_count = self.mutation_count(&cloud_id).await?;
                 if index >= mutation_count {
-                    return Ok(Response::empty()?.with_status(424));
+                    return Ok(Response::empty()?.with_status(424).with_headers(headers));
+                    // return Ok(Response::empty()?.with_status(424).with_headers(headers));
                 }
                 let obj_maybe = bucket.get(mutation_key(&cloud_id, index)).execute().await?;
                 Ok(
@@ -192,11 +197,11 @@ impl DurableObject for StorageCoordinator {
                 {
                     public_key
                 } else {
-                    return Ok(Response::empty()?.with_status(400));
+                    return Ok(Response::empty()?.with_status(400).with_headers(headers));
                 };
                 if let Err(e) = mutation.verify(public_key.clone()) {
                     println!("error verifying mutation: {:?}", e);
-                    return Ok(Response::empty()?.with_status(401));
+                    return Ok(Response::empty()?.with_status(401).with_headers(headers));
                 }
                 let cloud_id = mutation.public_key_hash;
 
@@ -204,7 +209,7 @@ impl DurableObject for StorageCoordinator {
                 let mutation_count = self.load_mutation_count(&cloud_id).await?;
 
                 if mutation.index != mutation_count as u64 {
-                    return Ok(Response::empty()?.with_status(400));
+                    return Ok(Response::empty()?.with_status(400).with_headers(headers));
                 }
                 let new_mutation_count = mutation.index + 1;
 
@@ -248,7 +253,7 @@ impl DurableObject for StorageCoordinator {
 
                 Ok(Response::empty()?.with_status(204).with_headers(headers))
             }
-            _ => Ok(Response::empty()?.with_status(404)),
+            _ => Ok(Response::empty()?.with_status(404).with_headers(headers)),
         }
     }
 }

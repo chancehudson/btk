@@ -92,7 +92,9 @@ impl NetworkConnection {
 
             loop {
                 while let Ok(action) = send_rx.try_recv() {
-                    if let Ok(serialized) = Bytes::encode(&action) {
+                    if matches!(action, Action::Ping) {
+                        // handled automatically by browser?
+                    } else if let Ok(serialized) = Bytes::encode(&action) {
                         if let Err(e) = write.send(Message::Bytes(serialized.into())).await {
                             println!("Error sending ws message {:?}, closing connection", e);
                             close_tx.send(()).ok();

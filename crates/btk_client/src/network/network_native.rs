@@ -91,7 +91,9 @@ impl NetworkConnection {
                         });
                         while let Ok(action) = send_rx.recv_async().await {
                             if let Ok(serialized) = Bytes::encode(&action) {
-                                if let Err(e) = write
+                                if matches!(action, Action::Ping) {
+                                    write.send(Message::Ping(vec![].into())).await.ok();
+                                } else if let Err(e) = write
                                     .send(Message::binary::<Vec<u8>>(serialized.into()))
                                     .await
                                 {
