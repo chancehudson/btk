@@ -1,9 +1,13 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock;
 
 use anondb::Bytes;
+use anondb::Journal;
 use anyhow::Result;
 use reqwest::StatusCode;
+use serde::Deserialize;
+use serde::Serialize;
 use web_time::Instant;
 
 use crate::app::AppEvent;
@@ -12,32 +16,87 @@ use network_common::*;
 
 use super::Cloud;
 
+const DEFAULT_SYNC_HTTP_URL: &str = "https://btk_worker.jchancehud.workers.dev";
+const DEFAULT_SYNC_WS_URL: &str = "wss://btk_worker.jchancehud.workers.dev";
+
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
+pub struct CloudSyncState {
+    pub http_url: String,
+    pub ws_url: String,
+    pub latest_confirmed_index: Option<u64>,
+}
+
+impl Default for CloudSyncState {
+    fn default() -> Self {
+        Self {
+            http_url: DEFAULT_SYNC_HTTP_URL.to_string(),
+            ws_url: DEFAULT_SYNC_WS_URL.to_string(),
+            latest_confirmed_index: None,
+        }
+    }
+}
+
 /// A trustlessly replicated Anondb instance with simple conflict resolution for realtime
 /// collaboration among keyholders.
 #[derive(Clone)]
 pub struct RemoteCloud {
     ctx: egui::Context,
-    http_url: String,
-    ws_url: String,
+    db: Journal,
+    sync_state: Arc<RwLock<CloudSyncState>>,
     connection_maybe: Arc<RwLock<Option<NetworkConnection>>>,
     pub(crate) cloud: Arc<Cloud>,
-    latest_confirmed_index: Arc<RwLock<Option<u64>>>,
     initial_sync_complete: Arc<RwLock<bool>>,
     last_keepalive: Arc<RwLock<Instant>>,
 }
 
 impl RemoteCloud {
-    pub fn new(ws_url: String, http_url: String, cloud: Arc<Cloud>, ctx: egui::Context) -> Self {
-        Self {
+    pub fn new(
+        data_dir_maybe: Option<PathBuf>,
+        cloud: Arc<Cloud>,
+        ctx: egui::Context,
+    ) -> Result<Self> {
+        let db = if let Some(data_dir) = data_dir_maybe {
+            let filepath = data_dir.join(format!("sync-{}.redb", cloud.id_hex()));
+            Journal::at_path(&filepath)?
+        } else {
+            Journal::in_memory(None)?
+        };
+        let sync_state = Arc::new(RwLock::new(
+            db.get::<(), CloudSyncState>("sync_state", &())?
+                .unwrap_or_default(),
+        ));
+        Ok(Self {
+            sync_state,
             ctx,
             connection_maybe: Arc::new(RwLock::new(None)),
-            ws_url,
-            http_url,
+            db,
             cloud,
-            latest_confirmed_index: Arc::new(RwLock::new(None)),
             initial_sync_complete: Arc::new(RwLock::new(false)),
             last_keepalive: Arc::new(RwLock::new(Instant::now())),
-        }
+        })
+    }
+
+    fn set_latest_confirmed_index(&self, new_index: u64) -> Result<()> {
+        self.sync_state.write().unwrap().latest_confirmed_index = Some(new_index);
+        self.write_sync_state()
+    }
+
+    fn latest_confirmed_index(&self) -> Option<u64> {
+        self.sync_state.read().unwrap().latest_confirmed_index
+    }
+
+    pub fn http_url(&self) -> String {
+        self.sync_state.read().unwrap().http_url.clone()
+    }
+
+    pub fn ws_url(&self) -> String {
+        self.sync_state.read().unwrap().ws_url.clone()
+    }
+
+    pub fn write_sync_state(&self) -> Result<()> {
+        self.db
+            .insert("sync_state", &(), &*self.sync_state.read().unwrap())?;
+        Ok(())
     }
 
     /// A single synchronization tick. Should be a short lived task to advance the state of
@@ -57,10 +116,10 @@ impl RemoteCloud {
             self.send(Action::Ping)?;
         }
 
-        let base_url = reqwest::Url::parse(&self.http_url)?;
+        let base_url = reqwest::Url::parse(&self.http_url())?;
         let journal_len = self.cloud.db.journal_tx_len()?;
         for i in 0..journal_len {
-            if let Some(confirmed_index) = self.latest_confirmed_index.read().unwrap().clone() {
+            if let Some(confirmed_index) = self.latest_confirmed_index() {
                 if confirmed_index >= i {
                     continue;
                 }
@@ -82,7 +141,7 @@ impl RemoteCloud {
 
                 if remote_tx.hash()? == tx.hash()? {
                     // println!("hashes match!");
-                    *self.latest_confirmed_index.write().unwrap() = Some(i);
+                    self.set_latest_confirmed_index(i)?;
                     self.ctx.request_repaint();
                     sync_status_tx.send((
                         *self.cloud.id(),
@@ -112,7 +171,7 @@ impl RemoteCloud {
                     .await?;
                 if res.status().is_success() {
                     println!("successfully sent mutation {}", i);
-                    *self.latest_confirmed_index.write().unwrap() = Some(i);
+                    self.set_latest_confirmed_index(i)?;
                     continue;
                 } else {
                     println!("failed to send mutation: {:?}", res.status());
@@ -172,7 +231,7 @@ impl RemoteCloud {
                 let mutation = Bytes::from(res.bytes().await?.to_vec()).parse::<Mutation>()?;
                 let (remote_tx, _index) = self.cloud.decrypt_tx(mutation)?;
                 self.cloud.db.append_tx(&remote_tx)?;
-                *self.latest_confirmed_index.write().unwrap() = Some(current_index);
+                self.set_latest_confirmed_index(current_index)?;
                 events_tx.send(AppEvent::RemoteCloudUpdate(*self.cloud.id()))?;
             } else {
                 self.ctx.request_repaint();
@@ -199,7 +258,7 @@ impl RemoteCloud {
 
     pub fn reconnect_if_needed(&self) {
         if !self.is_connected() {
-            let mut full_url = reqwest::Url::parse(&self.ws_url).expect("failed to parse ws url");
+            let mut full_url = reqwest::Url::parse(&self.ws_url()).expect("failed to parse ws url");
             full_url.set_query(Some(&format!("cloud_id={}", self.cloud.id_hex(),)));
             *self.connection_maybe.write().unwrap() =
                 Some(NetworkConnection::attempt_connection(full_url.to_string()));

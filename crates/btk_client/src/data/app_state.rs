@@ -141,12 +141,7 @@ impl AppState {
                 println!("opening connection for cloud {}", metadata.name);
                 self.remote_clouds.write().unwrap().insert(
                     *cloud.id(),
-                    RemoteCloud::new(
-                        "wss://btk_worker.jchancehud.workers.dev".to_string(),
-                        "https://btk_worker.jchancehud.workers.dev".to_string(),
-                        cloud.clone(),
-                        self.ctx.clone(),
-                    ),
+                    RemoteCloud::new(Self::local_data_dir()?, cloud.clone(), self.ctx.clone())?,
                 );
             }
         }
