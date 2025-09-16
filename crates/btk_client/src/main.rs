@@ -12,6 +12,7 @@ mod app;
 mod applets;
 mod data;
 mod network;
+mod theme;
 mod widgets;
 
 #[cfg(not(target_arch = "wasm32"))]

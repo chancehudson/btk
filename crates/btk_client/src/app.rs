@@ -14,6 +14,7 @@ use web_time::Instant;
 use crate::applets::*;
 use crate::data::AppState;
 use crate::data::CloudMetadata;
+use crate::theme::setup_themes;
 
 pub enum AppEvent {
     ActiveAppletChanged(String),
@@ -82,6 +83,7 @@ impl App {
         cc.egui_ctx.style_mut(|style| {
             style.wrap_mode = Some(egui::TextWrapMode::Extend);
         });
+        setup_themes(&cc.egui_ctx);
 
         // construct application state
         let mut state = AppState::new(cc.egui_ctx.clone())?;
