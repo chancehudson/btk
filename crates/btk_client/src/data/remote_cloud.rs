@@ -172,13 +172,19 @@ impl RemoteCloud {
 
                 println!("cloud has diverged!");
                 self.ctx.request_repaint();
-                sync_status_tx.send((*self.cloud.id(), format!("Diverged at mutation #{}", i)))?;
+                sync_status_tx.send((
+                    *self.cloud.id(),
+                    format!("Diverged at mutation index #{}", i),
+                ))?;
                 // TODO: handle merge
 
                 return Ok(());
             } else if res.status() == StatusCode::FAILED_DEPENDENCY {
                 self.ctx.request_repaint();
-                sync_status_tx.send((*self.cloud.id(), format!("Broadcasting mutation #{}", i)))?;
+                sync_status_tx.send((
+                    *self.cloud.id(),
+                    format!("Broadcasting mutation #{}", i + 1),
+                ))?;
                 // send the mutation
                 let mutation = self.cloud.encrypt_tx(tx.clone(), i)?;
                 let mut url = base_url.join("/mutate")?;

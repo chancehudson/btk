@@ -249,7 +249,11 @@ impl App {
                                         *cloud.id()
                                             == self.state.active_cloud_id.unwrap_or_default(),
                                         |tui| {
-                                            tui.heading(&metadata.name);
+                                            if metadata.name.trim().len() > 0 {
+                                                tui.heading(&metadata.name);
+                                            } else {
+                                                tui.heading("(unnamed cloud)");
+                                            }
                                         },
                                     )
                                     .clicked()
@@ -263,7 +267,6 @@ impl App {
     }
 
     fn render_import_view(&mut self, ctx: &egui::Context) {
-        let viewport_size = ctx.screen_rect().size();
         let window_size = Vec2::new(300.0, 300.0);
         egui::Modal::new("import cloud".into()).show(ctx, |ui| {
             ui.heading("Import an encrypted cloud");
