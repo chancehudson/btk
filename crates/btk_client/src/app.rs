@@ -56,6 +56,21 @@ fn webapp_href() -> Result<Option<String>> {
     Ok(None)
 }
 
+#[cfg(target_arch = "wasm32")]
+fn clear_href_query(url: String) -> Result<()> {
+    if let Some(window) = web_sys::window() {
+        let location = window.location();
+        if let Some(history) = window.history().ok() {
+            history
+                .push_state_with_url(&wasm_bindgen::JsValue::NULL, "", Some(&url))
+                .ok();
+        }
+        Ok(())
+    } else {
+        Ok(())
+    }
+}
+
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Result<Self> {
         // setup egui/taffy rendering stuff
@@ -109,16 +124,35 @@ impl App {
         };
 
         // on the web allow customizing the initial view
+        // TODO: cleanup and isolate the web code
         if let Some(href) = webapp_href()? {
-            let url = reqwest::Url::parse(&href)?;
-            for (key, _val) in url.query_pairs() {
+            let mut url = reqwest::Url::parse(&href)?;
+            let query_pairs = url
+                .query_pairs()
+                .map(|(key, val)| (key.to_string(), val.to_string()))
+                .collect::<Vec<_>>();
+            let mut query_pairs_mut = url.query_pairs_mut();
+            query_pairs_mut.clear();
+            for (key, val) in query_pairs {
+                // if the user was redirected to an import page, we want a refresh to not show the
+                // import popup
+                if key == "import" {
+                    out.showing_import = true;
+                } else {
+                    if val.is_empty() {
+                        query_pairs_mut.append_key_only(&key);
+                    } else {
+                        query_pairs_mut.append_pair(&key.to_string(), &val.to_string());
+                    }
+                }
                 if key == "clouds" {
                     out.show_clouds_menu = true;
                 }
-                if key == "import" {
-                    out.showing_import = true;
-                }
             }
+            query_pairs_mut.finish();
+            drop(query_pairs_mut);
+            #[cfg(target_arch = "wasm32")]
+            clear_href_query(url.to_string())?;
         }
         Ok(out)
     }
