@@ -8,13 +8,61 @@ use egui_taffy::taffy::prelude::*;
 
 use crate::app::AppEvent;
 use crate::data::AppState;
-use crate::widgets::ConfirmButton;
 
 use super::Applet;
 
 #[derive(Default)]
 pub struct HistoryApplet {
     history: Vec<JournalTransaction>,
+    showing_create_duplicate_modal: bool,
+    duplicate_index: u64,
+    duplicate_cloud_name: String,
+}
+
+impl HistoryApplet {
+    fn render_create_duplicate_modal(&mut self, ctx: &egui::Context, state: &AppState) {
+        let modal = egui::Modal::new("create_duplicate_modal".into()).show(ctx, |ui| {
+            let active_cloud = state.active_cloud();
+            if active_cloud.is_none() {
+                println!("WARNING: no active cloud");
+                self.showing_create_duplicate_modal = false;
+                return;
+            }
+            let (active_cloud, metadata) = active_cloud.unwrap();
+            ui.heading(format!(
+                "Share cloud {} at index {}",
+                metadata.name, self.duplicate_index
+            ));
+            let text_edit = egui::TextEdit::singleline(&mut self.duplicate_cloud_name)
+                .hint_text("New cloud name");
+            let input = ui.add(text_edit);
+
+            if self.duplicate_cloud_name.trim().len() > 3 {
+                input.show_tooltip_ui(|ui| {
+                    ui.label("press enter to create");
+                });
+            }
+
+            if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                self.showing_create_duplicate_modal = false;
+            }
+
+            if input.lost_focus() && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+                if let Err(e) = state.duplicate_active_cloud(
+                    self.duplicate_index,
+                    std::mem::take(&mut self.duplicate_cloud_name),
+                ) {
+                    println!("Err duplicating: {:?}", e);
+                }
+                self.showing_create_duplicate_modal = false;
+                state.reload_clouds();
+            }
+            input.request_focus();
+        });
+        if modal.response.should_close() {
+            self.showing_create_duplicate_modal = false;
+        }
+    }
 }
 
 impl Applet for HistoryApplet {
@@ -45,7 +93,10 @@ impl Applet for HistoryApplet {
         Ok(())
     }
 
-    fn render(&mut self, ctx: &egui::Context, _state: &AppState) {
+    fn render(&mut self, ctx: &egui::Context, state: &AppState) {
+        if self.showing_create_duplicate_modal {
+            self.render_create_duplicate_modal(ctx, state);
+        }
         egui::CentralPanel::default().show(ctx, |ui| {
             egui_taffy::tui(ui, "history")
                 .reserve_available_space()
@@ -91,6 +142,12 @@ impl Applet for HistoryApplet {
                                     "last hash: {}",
                                     hex::encode(tx.last_tx_hash).split_off(64 - 20)
                                 ));
+                                tui.ui(|ui| ui.add_space(4.0));
+                                if tui.button(|tui| tui.label("Share")).clicked() {
+                                    self.showing_create_duplicate_modal = true;
+                                    self.duplicate_index = (index - 1) as u64;
+                                    self.duplicate_cloud_name = String::default();
+                                }
                             });
                             tui.style(Style {
                                 flex_direction: FlexDirection::Column,
@@ -116,26 +173,6 @@ impl Applet for HistoryApplet {
                                     }
                                 }
                                 tui.label(format!("{} hidden operations", hidden_operation_count));
-                            });
-                            tui.style(Style {
-                                flex_direction: FlexDirection::Column,
-                                justify_content: Some(JustifyContent::SpaceBetween),
-                                padding: length(4.0),
-                                margin: length(2.0),
-                                ..Default::default()
-                            })
-                            .add(|tui| {
-                                tui.ui(|ui| {
-                                    let button = ConfirmButton::init(
-                                        hex::encode(tx.last_tx_hash),
-                                        ui,
-                                        &|b| {
-                                            b.text = "Duplicate cloud at this point".to_string();
-                                            b.confirm_text = "Not implemented yet :(".to_string();
-                                        },
-                                    );
-                                    ui.add(button);
-                                });
                             });
                         });
                     }

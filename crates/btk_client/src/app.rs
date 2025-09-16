@@ -228,7 +228,9 @@ impl App {
                     ui.horizontal(|ui| {
                         ui.heading("Clouds");
                         if ui.button("+").clicked() {
-                            self.state.create_cloud().expect("failed to create cloud");
+                            self.state
+                                .create_cloud(None)
+                                .expect("failed to create cloud");
                             self.state.load_clouds().expect("failed to load clouds");
                         }
                         if ui.button("import").clicked() {

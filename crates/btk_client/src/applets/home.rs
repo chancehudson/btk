@@ -123,7 +123,7 @@ impl Applet for HomeApplet {
                             tui.heading("Your encrypted clouds");
                             tui.ui(|ui| {
                                 if ui.button("+").clicked() {
-                                    state.create_cloud().expect("failed to create cloud");
+                                    state.create_cloud(None).expect("failed to create cloud");
                                     state.reload_clouds();
                                 }
                             });

@@ -108,6 +108,13 @@ impl AppState {
                     .cloned()
                     .collect::<Vec<_>>();
                 for remote in remotes {
+                    if !remote_clouds
+                        .read()
+                        .unwrap()
+                        .contains_key(remote.cloud.id())
+                    {
+                        continue;
+                    }
                     if let Err(e) = remote.tick(events_tx.clone(), sync_status_tx.clone()).await {
                         println!("Error ticking remote! {:?}", e);
                     }
@@ -215,6 +222,28 @@ impl AppState {
         Ok(())
     }
 
+    pub fn duplicate_active_cloud(&self, index: u64, name: String) -> Result<Arc<Cloud>> {
+        let (cloud, _) = self
+            .active_cloud()
+            .ok_or(anyhow::anyhow!("no active cloud"))?;
+        let genesis_tx = cloud.db.flatten_at_index(index)?;
+        drop(cloud); // prevent using the wrong name below
+        let new_cloud = Arc::new(Cloud::new(Self::local_data_dir()?)?);
+        new_cloud.db.append_tx(&genesis_tx)?;
+        let mut metadata = CloudMetadata::create();
+        metadata.name = name;
+        new_cloud.set_metadata(metadata.clone())?;
+        self.db
+            .insert(CLOUD_KEYS_TABLE, new_cloud.id(), new_cloud.private_key())?;
+        self.clouds
+            .write()
+            .unwrap()
+            .insert(*new_cloud.id(), (new_cloud.clone(), metadata));
+        #[cfg(target_arch = "wasm32")]
+        self.persist_keys_localstorage()?;
+        Ok(new_cloud)
+    }
+
     /// Create a new encrypted cloud. This is a local keypair keyed
     /// to an entry in the database.
     ///
@@ -226,19 +255,22 @@ impl AppState {
     /// encryption. A syntax for expressing queries
     /// (like MongoDB/SQL) can trivially be built around this.
     ///
-    pub fn create_cloud(&self) -> Result<()> {
-        let cloud = Cloud::new(Self::local_data_dir()?)?;
-        let metadata = CloudMetadata::create();
+    pub fn create_cloud(&self, name_maybe: Option<String>) -> Result<Arc<Cloud>> {
+        let cloud = Arc::new(Cloud::new(Self::local_data_dir()?)?);
+        let mut metadata = CloudMetadata::create();
+        if let Some(name) = name_maybe {
+            metadata.name = name;
+        }
         cloud.set_metadata(metadata.clone())?;
         self.db
             .insert(CLOUD_KEYS_TABLE, cloud.id(), cloud.private_key())?;
         self.clouds
             .write()
             .unwrap()
-            .insert(*cloud.id(), (Arc::new(cloud), metadata));
+            .insert(*cloud.id(), (cloud.clone(), metadata));
         #[cfg(target_arch = "wasm32")]
         self.persist_keys_localstorage()?;
-        Ok(())
+        Ok(cloud)
     }
 
     /// Returns the new cloud id
