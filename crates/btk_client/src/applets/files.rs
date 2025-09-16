@@ -168,7 +168,9 @@ impl FilesApplet {
                     })
                     .show(|tui| {
                         tui.heading(&self.selected_filename);
+                        tui.ui(|ui| ui.add_space(4.0));
                         tui.separator();
+                        tui.ui(|ui| ui.add_space(4.0));
                         let file_extension = self
                             .selected_filename
                             .split(".")
@@ -176,7 +178,12 @@ impl FilesApplet {
                             .unwrap_or_default()
                             .to_string();
                         tui.label(format!("{} bytes", self.selected_file_bytes.len()));
+                        tui.ui(|ui| ui.add_space(4.0));
                         if tui
+                            .style(Style {
+                                padding: length(4.0),
+                                ..Default::default()
+                            })
                             .button(|tui| {
                                 tui.label("Download");
                             })
@@ -184,7 +191,22 @@ impl FilesApplet {
                         {
                             self.download_selected_file().ok();
                         }
+                        tui.ui(|ui| ui.add_space(4.0));
+                        if tui
+                            .style(Style {
+                                padding: length(4.0),
+                                ..Default::default()
+                            })
+                            .button(|tui| {
+                                tui.label("Copy to clipboard");
+                            })
+                            .clicked()
+                        {
+                            self.download_selected_file().ok();
+                        }
+                        tui.ui(|ui| ui.add_space(4.0));
                         tui.separator();
+                        tui.ui(|ui| ui.add_space(4.0));
                         if file_extension == "jpg"
                             || file_extension == "jpeg"
                             || file_extension == "png"
