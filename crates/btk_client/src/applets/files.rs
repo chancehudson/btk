@@ -138,7 +138,7 @@ impl FilesApplet {
         });
     }
 
-    fn render_file_info(&mut self, ctx: &egui::Context, state: &AppState) {
+    fn render_file_info(&mut self, ctx: &egui::Context, _state: &AppState) {
         let viewport_size = ctx.screen_rect();
         egui::SidePanel::right("file_info")
             .default_width((viewport_size.width() / 2.0).min(500.0))

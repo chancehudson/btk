@@ -351,7 +351,6 @@ impl eframe::App for App {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        ctx.request_repaint_after(Duration::from_secs(1));
         let render_start = Instant::now();
 
         for (cloud_id, status) in self.state.sync_status.1.drain() {
@@ -433,6 +432,7 @@ impl eframe::App for App {
                 }
                 ActionRequest::LoadClouds => {
                     self.state.load_clouds().expect("failed to load clouds");
+                    ctx.request_repaint();
                 }
                 ActionRequest::SwitchCloud(cloud_id) => {
                     self.state
@@ -443,6 +443,7 @@ impl eframe::App for App {
                         .0
                         .send(AppEvent::ActiveCloudChanged(self.active_applet.clone()))
                         .expect("failed to send ActiveCloudChanged app event");
+                    ctx.request_repaint();
                 }
             }
         }

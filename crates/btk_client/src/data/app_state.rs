@@ -166,10 +166,11 @@ impl AppState {
 
         if let Some(active_cloud_id) = self.active_cloud_id {
             if !self.clouds.read().unwrap().contains_key(&active_cloud_id) {
-                self.active_cloud_id = None;
                 self.switch_cloud(None);
             }
         }
+
+        self.ctx.request_repaint();
 
         Ok(())
     }

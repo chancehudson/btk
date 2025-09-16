@@ -1,4 +1,3 @@
-use egui::Margin;
 use egui::Widget;
 use serde::Deserialize;
 use serde::Serialize;

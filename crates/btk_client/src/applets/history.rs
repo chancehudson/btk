@@ -89,7 +89,7 @@ impl Applet for HistoryApplet {
                                 tui.heading(format!("mutation #{}", index));
                                 tui.label(format!(
                                     "last hash: {}",
-                                    hex::encode(tx.last_tx_hash).split_off(20)
+                                    hex::encode(tx.last_tx_hash).split_off(64 - 20)
                                 ));
                             });
                             tui.style(Style {
