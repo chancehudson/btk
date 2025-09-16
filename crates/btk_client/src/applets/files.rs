@@ -26,7 +26,7 @@ pub struct FilesApplet {
 
 impl FilesApplet {
     #[cfg(target_arch = "wasm32")]
-    fn download_selected_file(&mut self) {
+    fn download_selected_file(&mut self) -> Result<()> {
         let blob = gloo_file::Blob::new_with_options(self.selected_file_bytes.as_slice(), None);
 
         // Create download link
@@ -45,11 +45,22 @@ impl FilesApplet {
         use wasm_bindgen_futures::wasm_bindgen::JsCast;
         anchor.unchecked_into::<web_sys::HtmlElement>().click();
 
-        web_sys::Url::revoke_object_url(&url).unwrap();
+        web_sys::Url::revoke_object_url(&url).ok();
+        Ok(())
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn download_selected_file(&mut self) {}
+    fn download_selected_file(&mut self) -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let temp_file = dir.path().join(&self.selected_filename);
+
+        fs::write(&temp_file, &self.selected_file_bytes)?;
+
+        open::that(dir.path()).ok();
+
+        _ = dir.keep();
+        Ok(())
+    }
 
     fn load_selected_file(&mut self, state: &AppState) {
         if let Some((cloud, _)) = state.active_cloud() {
@@ -166,7 +177,7 @@ impl FilesApplet {
                             })
                             .clicked()
                         {
-                            self.download_selected_file();
+                            self.download_selected_file().ok();
                         }
                         if file_extension == "jpg"
                             || file_extension == "jpeg"
