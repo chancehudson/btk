@@ -49,6 +49,7 @@ pub struct RemoteCloud {
     pub(crate) cloud: Arc<Cloud>,
     initial_sync_complete: Arc<RwLock<bool>>,
     last_keepalive: Arc<RwLock<Instant>>,
+    pub filepath_maybe: Option<PathBuf>,
 }
 
 impl RemoteCloud {
@@ -57,11 +58,11 @@ impl RemoteCloud {
         cloud: Arc<Cloud>,
         ctx: egui::Context,
     ) -> Result<Self> {
-        let db = if let Some(data_dir) = data_dir_maybe {
+        let (db, filepath_maybe) = if let Some(data_dir) = data_dir_maybe {
             let filepath = data_dir.join(format!("sync-{}.redb", cloud.id_hex()));
-            Journal::at_path(&filepath)?
+            (Journal::at_path(&filepath)?, Some(filepath))
         } else {
-            Journal::in_memory(None)?
+            (Journal::in_memory(None)?, None)
         };
         let sync_state = Arc::new(RwLock::new(
             db.get::<(), CloudSyncState>("sync_state", &())?
@@ -75,6 +76,7 @@ impl RemoteCloud {
             cloud,
             initial_sync_complete: Arc::new(RwLock::new(false)),
             last_keepalive: Arc::new(RwLock::new(Instant::now())),
+            filepath_maybe,
         })
     }
 

@@ -67,7 +67,7 @@ impl HomeApplet {
                 } else {
                     tui.ui(|ui| {
                         if ui.button("Switch").clicked() {
-                            state.switch_cloud(*cloud.id());
+                            state.switch_cloud(Some(*cloud.id()));
                         }
                     });
                 }

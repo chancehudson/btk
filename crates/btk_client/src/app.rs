@@ -25,7 +25,7 @@ pub enum AppEvent {
 pub enum ActionRequest {
     LoadClouds,
     // the id to switch to
-    SwitchCloud([u8; 32]),
+    SwitchCloud(Option<[u8; 32]>),
     UpdateCloudMetadata([u8; 32], CloudMetadata),
 }
 
@@ -75,7 +75,7 @@ impl App {
 
         if let Some(cloud_id) = state.active_cloud_id {
             // trigger an event being sent so applets can handle loading
-            state.switch_cloud(cloud_id);
+            state.switch_cloud(Some(cloud_id));
         }
 
         let mut applets: IndexMap<String, _> = IndexMap::new();
@@ -258,7 +258,7 @@ impl App {
                                     )
                                     .clicked()
                                 {
-                                    self.state.switch_cloud(*cloud.id());
+                                    self.state.switch_cloud(Some(*cloud.id()));
                                 }
                             });
                         }
@@ -291,7 +291,7 @@ impl App {
                 match self.state.import_cloud(&self.import_key) {
                     Ok(cloud_id) => {
                         self.state.load_clouds().unwrap();
-                        self.state.set_active_cloud(cloud_id).unwrap();
+                        self.state.set_active_cloud(Some(cloud_id)).unwrap();
                         self.showing_import = false;
                         self.import_key = String::default();
                     }
@@ -449,7 +449,6 @@ impl eframe::App for App {
 
         let pending_events: Vec<_> = self.state.pending_events.1.drain().collect();
         if !pending_events.is_empty() {
-            println!("{}", pending_events.len());
             for applet in self.applets.values_mut() {
                 applet
                     .handle_app_events(&pending_events, &self.state)

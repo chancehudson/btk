@@ -5,6 +5,7 @@ use crate::app::ActionRequest;
 use crate::app::AppEvent;
 use crate::applets::Applet;
 use crate::data::AppState;
+use crate::widgets::ConfirmButton;
 use crate::widgets::EditableLabel;
 
 #[derive(Default)]
@@ -113,6 +114,20 @@ impl Applet for SettingsApplet {
                 Color32::RED,
                 "WARNING: sharing this key irreversibly shares access to this cloud!",
             );
+
+            ui.separator();
+            ui.horizontal(|ui| {
+                let delete_button =
+                    ConfirmButton::init("confirm_cloud_delete".to_string(), ui, &|b| {
+                        b.text = "Delete cloud".to_string();
+                        b.confirm_text = "Are you sure?".to_string();
+                    });
+                if delete_button.confirmed() {
+                    state.delete_cloud(*active_cloud.id()).ok();
+                }
+                ui.add(delete_button);
+                ui.label("Cloud data will be deleted from this device only");
+            });
 
             ui.separator();
             ui.label("Remote connection");

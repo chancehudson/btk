@@ -82,6 +82,7 @@ impl FilesApplet {
         let active_cloud = state.active_cloud();
         if active_cloud.is_none() {
             println!("WARNING: trying to load files with no active cloud");
+            return Ok(());
         }
         let (cloud, _metadata) = active_cloud.unwrap();
         self.filenames = cloud.db.list_keys::<String>("files")?;

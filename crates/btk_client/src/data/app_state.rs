@@ -51,7 +51,7 @@ impl AppState {
         self.pending_events.1.drain().collect()
     }
 
-    pub fn switch_cloud(&self, id: [u8; 32]) {
+    pub fn switch_cloud(&self, id: Option<[u8; 32]>) {
         self.pending_requests
             .0
             .send(ActionRequest::SwitchCloud(id))
@@ -163,6 +163,48 @@ impl AppState {
                 first.created_at.cmp(&second.created_at)
             }
         });
+
+        if let Some(active_cloud_id) = self.active_cloud_id {
+            if !self.clouds.read().unwrap().contains_key(&active_cloud_id) {
+                self.active_cloud_id = None;
+                self.switch_cloud(None);
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn delete_cloud(&self, id: [u8; 32]) -> Result<()> {
+        let mut tx = self.db.begin_write()?;
+        let mut table = tx.open_table(CLOUD_KEYS_TABLE)?;
+        table.remove(&id)?;
+        drop(table);
+        tx.commit()?;
+
+        // delete the cloud store
+        if let Some(filepath) = self
+            .clouds
+            .write()
+            .unwrap()
+            .remove(&id)
+            .and_then(|(cloud, _)| cloud.filepath().cloned())
+        {
+            std::fs::remove_file(filepath)?;
+        }
+        // delete the sync state
+        if let Some(filepath) = self
+            .remote_clouds
+            .write()
+            .unwrap()
+            .remove(&id)
+            .and_then(|remote| remote.filepath_maybe)
+        {
+            std::fs::remove_file(filepath)?;
+        }
+
+        self.reload_clouds();
+        self.ctx.request_repaint();
+
         Ok(())
     }
 
@@ -204,9 +246,15 @@ impl AppState {
         Ok(*cloud.id())
     }
 
-    pub fn set_active_cloud(&mut self, id: [u8; 32]) -> Result<()> {
-        self.db.insert(CLOUD_KEYS_TABLE, &ACTIVE_CLOUD_KEY, &id)?;
-        self.active_cloud_id = Some(id);
+    pub fn set_active_cloud(&mut self, id: Option<[u8; 32]>) -> Result<()> {
+        if let Some(id) = id {
+            self.db.insert(CLOUD_KEYS_TABLE, &ACTIVE_CLOUD_KEY, &id)?;
+            self.active_cloud_id = Some(id);
+        } else {
+            self.db
+                .remove::<_, [u8; 32]>(CLOUD_KEYS_TABLE, &ACTIVE_CLOUD_KEY)?;
+            self.active_cloud_id = None;
+        }
         Ok(())
     }
 
