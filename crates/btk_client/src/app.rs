@@ -450,6 +450,21 @@ impl eframe::App for App {
             self.render_clouds_menu(ctx);
         }
 
+        let pending_events: Vec<_> = self.state.pending_events.1.drain().collect();
+        if !pending_events.is_empty() {
+            for applet in self.applets.values_mut() {
+                applet
+                    .handle_app_events(&pending_events, &self.state)
+                    .expect(&format!("applet {} failed to handle events", applet.name()));
+            }
+            for event in &pending_events {
+                if matches!(event, AppEvent::RemoteCloudUpdate(_)) {
+                    self.state.reload_clouds();
+                    break;
+                }
+            }
+        }
+
         // applet content renderer
         if let Some(applet) = self.applets.get_mut(&self.active_applet) {
             applet.render(ctx, &self.state);
@@ -488,21 +503,6 @@ impl eframe::App for App {
                         .0
                         .send(AppEvent::ActiveCloudChanged(self.active_applet.clone()))
                         .expect("failed to send ActiveCloudChanged app event");
-                }
-            }
-        }
-
-        let pending_events: Vec<_> = self.state.pending_events.1.drain().collect();
-        if !pending_events.is_empty() {
-            for applet in self.applets.values_mut() {
-                applet
-                    .handle_app_events(&pending_events, &self.state)
-                    .expect(&format!("applet {} failed to handle events", applet.name()));
-            }
-            for event in &pending_events {
-                if matches!(event, AppEvent::RemoteCloudUpdate(_)) {
-                    self.state.reload_clouds();
-                    break;
                 }
             }
         }
