@@ -24,6 +24,7 @@ pub struct CloudSyncState {
     pub http_url: String,
     pub ws_url: String,
     pub latest_confirmed_index: Option<u64>,
+    pub synchronization_enabled: bool,
 }
 
 impl Default for CloudSyncState {
@@ -32,6 +33,7 @@ impl Default for CloudSyncState {
             http_url: DEFAULT_SYNC_HTTP_URL.to_string(),
             ws_url: DEFAULT_SYNC_WS_URL.to_string(),
             latest_confirmed_index: None,
+            synchronization_enabled: true,
         }
     }
 }
@@ -76,12 +78,24 @@ impl RemoteCloud {
         })
     }
 
+    pub fn set_synchronization_enabled(&self, enabled: bool) -> Result<()> {
+        self.sync_state.write().unwrap().synchronization_enabled = enabled;
+        if !enabled {
+            *self.initial_sync_complete.write().unwrap() = false;
+        }
+        self.write_sync_state()
+    }
+
+    pub fn synchronization_enabled(&self) -> bool {
+        self.sync_state.read().unwrap().synchronization_enabled
+    }
+
     fn set_latest_confirmed_index(&self, new_index: u64) -> Result<()> {
         self.sync_state.write().unwrap().latest_confirmed_index = Some(new_index);
         self.write_sync_state()
     }
 
-    fn latest_confirmed_index(&self) -> Option<u64> {
+    pub fn latest_confirmed_index(&self) -> Option<u64> {
         self.sync_state.read().unwrap().latest_confirmed_index
     }
 
@@ -106,6 +120,12 @@ impl RemoteCloud {
         events_tx: flume::Sender<AppEvent>,
         sync_status_tx: flume::Sender<([u8; 32], String)>,
     ) -> Result<()> {
+        if !self.synchronization_enabled() {
+            self.ctx.request_repaint();
+            sync_status_tx.send((*self.cloud.id(), format!("Synchronization disabled")))?;
+            *self.connection_maybe.write().unwrap() = None;
+            return Ok(());
+        }
         self.reconnect_if_needed();
         if Instant::now()
             .duration_since(*self.last_keepalive.read().unwrap())
@@ -152,13 +172,13 @@ impl RemoteCloud {
 
                 println!("cloud has diverged!");
                 self.ctx.request_repaint();
-                sync_status_tx.send((*self.cloud.id(), format!("Diverged at change {}", i)))?;
+                sync_status_tx.send((*self.cloud.id(), format!("Diverged at mutation #{}", i)))?;
                 // TODO: handle merge
 
                 return Ok(());
             } else if res.status() == StatusCode::FAILED_DEPENDENCY {
                 self.ctx.request_repaint();
-                sync_status_tx.send((*self.cloud.id(), format!("Broadcasting change {}", i)))?;
+                sync_status_tx.send((*self.cloud.id(), format!("Broadcasting mutation #{}", i)))?;
                 // send the mutation
                 let mutation = self.cloud.encrypt_tx(tx.clone(), i)?;
                 let mut url = base_url.join("/mutate")?;

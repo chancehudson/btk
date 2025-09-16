@@ -1,4 +1,5 @@
 use anyhow::Result;
+use egui::Color32;
 
 use crate::app::ActionRequest;
 use crate::app::AppEvent;
@@ -110,35 +111,49 @@ impl Applet for SettingsApplet {
 
             ui.separator();
             ui.label("Remote connection");
-            // ui.horizontal(|ui| {
-            //     ui.label("remote url:");
-            //     let mut url_label =
-            //         EditableLabel::init(format!("{}-url", active_cloud.id_hex()), ui, &|label| {});
-            //     if url_label.changed() {
-            //         let mut new_metadata = active_cloud
-            //             .load_metadata()
-            //             .expect("failed to load existing metadata");
-            //         if url_label.value.trim().is_empty() {
-            //             new_metadata.remote_url = None;
-            //         } else {
-            //             new_metadata.remote_url = Some(url_label.value.to_string());
-            //         }
-            //         state
-            //             .pending_requests
-            //             .0
-            //             .send(ActionRequest::UpdateCloudMetadata(
-            //                 active_cloud_id,
-            //                 new_metadata,
-            //             ))
-            //             .expect("failed to send update cloud metadata action request");
-            //     }
-            //     if let Some(remote_url) = &active_cloud.metadata.remote_url {
-            //         url_label.update_value_if_needed(&remote_url);
-            //     } else {
-            //         url_label.update_value_if_needed("");
-            //     }
-            //     ui.add(url_label);
-            // });
+            let remote = state
+                .remote_clouds
+                .read()
+                .unwrap()
+                .get(&active_cloud_id)
+                .cloned();
+            if remote.is_none() {
+                return;
+            }
+            let remote = remote.unwrap();
+            ui.horizontal(|ui| {
+                ui.label("http url:");
+                ui.label(remote.http_url());
+            });
+            ui.horizontal(|ui| {
+                ui.label("ws url:");
+                ui.label(remote.ws_url());
+            });
+            ui.horizontal(|ui| {
+                ui.label("confirmed mutations:");
+                ui.label(format!(
+                    "{}",
+                    remote
+                        .latest_confirmed_index()
+                        .and_then(|v| Some((v + 1).to_string()))
+                        .or_else(|| Some("None".to_string()))
+                        .unwrap()
+                ));
+            });
+            ui.horizontal(|ui| {
+                ui.label("synchronization:");
+                if remote.synchronization_enabled() {
+                    ui.colored_label(Color32::GREEN, "enabled");
+                    if ui.button("disable").clicked() {
+                        remote.set_synchronization_enabled(false).ok();
+                    }
+                } else {
+                    ui.colored_label(Color32::RED, "disabled");
+                    if ui.button("enable").clicked() {
+                        remote.set_synchronization_enabled(true).ok();
+                    }
+                }
+            });
         });
     }
 }

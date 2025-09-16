@@ -336,7 +336,7 @@ impl App {
                         if let Some(status) = self.sync_status.get(cloud.id()) {
                             tui.label(status);
                         } else {
-                            tui.label("initializing...");
+                            tui.label("Initializing...");
                         }
                     } else {
                         tui.label("No active cloud!");
