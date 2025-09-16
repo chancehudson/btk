@@ -13,6 +13,7 @@ use egui_taffy::taffy::prelude::*;
 use super::Applet;
 use crate::app::AppEvent;
 use crate::data::AppState;
+use crate::widgets::ConfirmButton;
 
 #[derive(Default)]
 pub struct FilesApplet {
@@ -59,6 +60,18 @@ impl FilesApplet {
         open::that(dir.path()).ok();
 
         _ = dir.keep();
+        Ok(())
+    }
+
+    fn delete_selected_file(&mut self, state: &AppState) -> Result<()> {
+        if let Some((active_cloud, _)) = state.active_cloud() {
+            active_cloud
+                .db
+                .remove::<String, Bytes>("files", &self.selected_filename)?;
+            self.selected_filename = String::default();
+            self.selected_file_bytes = Vec::default();
+            self.load_files(state)?;
+        }
         Ok(())
     }
 
@@ -142,7 +155,7 @@ impl FilesApplet {
         }
     }
 
-    fn render_file_info(&mut self, ctx: &egui::Context, _state: &AppState) {
+    fn render_file_info(&mut self, ctx: &egui::Context, state: &AppState) {
         let viewport_size = ctx.screen_rect();
         egui::SidePanel::right("file_info")
             .default_width((viewport_size.width() / 2.0).min(500.0))
@@ -167,7 +180,26 @@ impl FilesApplet {
                         ..Default::default()
                     })
                     .show(|tui| {
-                        tui.heading(&self.selected_filename);
+                        tui.style(Style {
+                            flex_direction: FlexDirection::Row,
+                            justify_content: Some(JustifyContent::SpaceBetween),
+                            align_items: Some(AlignItems::FlexEnd),
+                            ..Default::default()
+                        })
+                        .add(|tui| {
+                            tui.heading(&self.selected_filename);
+                            tui.ui(|ui| {
+                                let delete_button =
+                                    ConfirmButton::init("file_info_delete".to_string(), ui, &|b| {
+                                        b.text = "Delete".to_string();
+                                        b.confirm_text = "Are you sure?".to_string();
+                                    });
+                                if delete_button.confirmed() {
+                                    self.delete_selected_file(state).ok();
+                                }
+                                ui.add(delete_button);
+                            });
+                        });
                         tui.ui(|ui| ui.add_space(4.0));
                         tui.separator();
                         tui.ui(|ui| ui.add_space(4.0));
@@ -340,9 +372,7 @@ impl Applet for FilesApplet {
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.vertical_centered(|ui| {
-                ui.heading("Files");
-            });
+            ui.heading("Files");
             egui_taffy::tui(ui, "home")
                 .reserve_available_space()
                 .style(Style {
