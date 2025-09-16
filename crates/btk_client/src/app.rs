@@ -404,8 +404,9 @@ impl eframe::App for App {
 
         // top tab bar
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+            let available_width = ui.available_width();
             ui.columns(2, |columns| {
-                columns[0].horizontal(|ui| {
+                let first_response = columns[0].horizontal(|ui| {
                     let last_value = self.show_clouds_menu;
                     if ui
                         .selectable_value(&mut self.show_clouds_menu, true, "☁")
@@ -428,13 +429,18 @@ impl eframe::App for App {
                         self.change_applet(next_applet);
                     }
                 });
-                columns[1].with_layout(egui::Layout::right_to_left(egui::Align::RIGHT), |ui| {
-                    ui.toggle_value(&mut self.show_stats, "Stats");
-                    ui.separator();
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        egui::widgets::global_theme_preference_buttons(ui);
-                    });
-                })
+                // prevent overlap between the left and right menu bar elements on small screens
+                if available_width < 600.0 {
+                    first_response
+                } else {
+                    columns[1].with_layout(egui::Layout::right_to_left(egui::Align::RIGHT), |ui| {
+                        ui.toggle_value(&mut self.show_stats, "Stats");
+                        ui.separator();
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            egui::widgets::global_theme_preference_buttons(ui);
+                        });
+                    })
+                }
             });
         });
 
