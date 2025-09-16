@@ -89,6 +89,9 @@ impl AppState {
 
     /// Initialize `LocalState` using `self.db`.
     pub fn init(&mut self) -> Result<()> {
+        #[cfg(target_arch = "wasm32")]
+        self.load_keys_localstorage()?;
+
         self.load_clouds()?;
 
         self.active_cloud_id = self.db.get(CLOUD_KEYS_TABLE, &ACTIVE_CLOUD_KEY)?;
@@ -203,6 +206,9 @@ impl AppState {
             std::fs::remove_file(filepath)?;
         }
 
+        #[cfg(target_arch = "wasm32")]
+        self.persist_keys_localstorage()?;
+
         self.reload_clouds();
         self.ctx.request_repaint();
 
@@ -230,6 +236,8 @@ impl AppState {
             .write()
             .unwrap()
             .insert(*cloud.id(), (Arc::new(cloud), metadata));
+        #[cfg(target_arch = "wasm32")]
+        self.persist_keys_localstorage()?;
         Ok(())
     }
 
@@ -256,6 +264,8 @@ impl AppState {
                 .remove::<_, [u8; 32]>(CLOUD_KEYS_TABLE, &ACTIVE_CLOUD_KEY)?;
             self.active_cloud_id = None;
         }
+        #[cfg(target_arch = "wasm32")]
+        self.persist_keys_localstorage()?;
         Ok(())
     }
 
@@ -297,5 +307,35 @@ impl AppState {
     #[cfg(target_arch = "wasm32")]
     fn local_data_dir() -> Result<Option<PathBuf>> {
         Ok(None)
+    }
+
+    // Functions below here are for persisting to local storage in browser
+
+    #[cfg(target_arch = "wasm32")]
+    fn load_keys_localstorage(&self) -> Result<()> {
+        use gloo_storage::Storage;
+
+        let keys_str = gloo_storage::LocalStorage::get::<String>("btk_keys")
+            .ok()
+            .unwrap_or_default();
+        for key_str in keys_str.split(",") {
+            self.import_cloud(key_str).ok();
+        }
+        Ok(())
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn persist_keys_localstorage(&self) -> Result<()> {
+        use gloo_storage::Storage;
+
+        let keys_str = self
+            .cloud_keys()?
+            .into_iter()
+            .map(|key| hex::encode(key))
+            .collect::<Vec<_>>()
+            .join(",");
+
+        gloo_storage::LocalStorage::set("btk_keys", keys_str).ok();
+        Ok(())
     }
 }
