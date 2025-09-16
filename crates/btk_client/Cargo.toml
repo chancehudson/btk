@@ -36,6 +36,7 @@ reqwest = "0.12.23"
 tokio_with_wasm = { version = "0.8.7", features = ["rt", "time"] }
 gloo-file = "0.3.0"
 tempfile = "3.22.0"
+arboard = "3.6.1"
 
 # For web builds
 [target.'cfg(target_arch = "wasm32")'.dependencies]

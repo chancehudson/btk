@@ -192,27 +192,42 @@ impl FilesApplet {
                             self.download_selected_file().ok();
                         }
                         tui.ui(|ui| ui.add_space(4.0));
-                        if tui
-                            .style(Style {
-                                padding: length(4.0),
-                                ..Default::default()
-                            })
-                            .button(|tui| {
-                                tui.label("Copy to clipboard");
-                            })
-                            .clicked()
-                        {
-                            self.download_selected_file().ok();
+                        let is_image = file_extension == "jpg"
+                            || file_extension == "jpeg"
+                            || file_extension == "png"
+                            || file_extension == "gif"
+                            || file_extension == "webp";
+                        if is_image {
+                            if tui
+                                .style(Style {
+                                    padding: length(4.0),
+                                    ..Default::default()
+                                })
+                                .button(|tui| {
+                                    tui.label("Copy to clipboard");
+                                })
+                                .clicked()
+                            {
+                                if let Some(mut clipboard) = arboard::Clipboard::new().ok()
+                                    && let Some(image) = ::image::load_from_memory(
+                                        self.selected_file_bytes.as_slice(),
+                                    )
+                                    .ok()
+                                {
+                                    clipboard
+                                        .set_image(arboard::ImageData {
+                                            width: image.width() as usize,
+                                            height: image.height() as usize,
+                                            bytes: image.to_rgba8().to_vec().into(),
+                                        })
+                                        .ok();
+                                }
+                            }
                         }
                         tui.ui(|ui| ui.add_space(4.0));
                         tui.separator();
                         tui.ui(|ui| ui.add_space(4.0));
-                        if file_extension == "jpg"
-                            || file_extension == "jpeg"
-                            || file_extension == "png"
-                            || file_extension == "gif"
-                            || file_extension == "webp"
-                        {
+                        if is_image {
                             let image = egui::Image::from_bytes(
                                 self.selected_filename.clone(),
                                 self.selected_file_bytes.clone(),
