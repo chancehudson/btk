@@ -3,6 +3,8 @@ use std::sync::Arc;
 
 use anondb::Bytes;
 use anyhow::Result;
+use egui_commonmark::CommonMarkCache;
+use egui_commonmark::CommonMarkViewer;
 use egui_taffy::TuiBuilderLogic;
 use egui_taffy::taffy::Overflow;
 use egui_taffy::taffy::Point;
@@ -18,9 +20,53 @@ pub struct FilesApplet {
     showing_add_file_window: bool,
     add_file_name: String,
     add_file_bytes: Arc<[u8]>,
+    selected_filename: String,
+    selected_file_bytes: Vec<u8>,
 }
 
 impl FilesApplet {
+    #[cfg(target_arch = "wasm32")]
+    fn download_selected_file(&mut self) {
+        let blob = gloo_file::Blob::new_with_options(self.selected_file_bytes.as_slice(), None);
+
+        // Create download link
+        let url = web_sys::Url::create_object_url_with_blob(&blob.into()).unwrap();
+
+        let window = web_sys::window().unwrap();
+        let document = window.document().unwrap();
+
+        let anchor = document.create_element("a").unwrap();
+        anchor.set_attribute("href", &url).unwrap();
+        anchor
+            .set_attribute("download", &self.selected_filename)
+            .unwrap();
+
+        // Trigger click
+        use wasm_bindgen_futures::wasm_bindgen::JsCast;
+        anchor.unchecked_into::<web_sys::HtmlElement>().click();
+
+        web_sys::Url::revoke_object_url(&url).unwrap();
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn download_selected_file(&mut self) {}
+
+    fn load_selected_file(&mut self, state: &AppState) {
+        if let Some((cloud, _)) = state.active_cloud() {
+            self.selected_file_bytes = cloud
+                .db
+                .get::<String, Bytes>("files", &self.selected_filename)
+                .unwrap_or_else(|e| {
+                    println!("WARNING: failed to load selected file: {e:?}");
+                    None
+                })
+                .unwrap_or_default()
+                .to_vec();
+        } else {
+            println!("WARNING: no active cloud!");
+        }
+    }
+
     fn load_files(&mut self, state: &AppState) -> Result<()> {
         let active_cloud = state.active_cloud();
         if active_cloud.is_none() {
@@ -32,46 +78,129 @@ impl FilesApplet {
     }
 
     fn render_add_file_window(&mut self, ctx: &egui::Context, state: &AppState) {
-        let viewport_size = ctx.screen_rect().size();
         let window_size = egui::Vec2::new(300.0, 300.0);
-        egui::Window::new("add file")
-            .default_size(window_size)
-            .default_pos([
-                (viewport_size.x - window_size.x) * 0.5,
-                (viewport_size.y - window_size.y) * 0.5,
-            ])
-            .collapsible(false)
-            .show(ctx, |ui| {
+        egui::Modal::new("add file".into()).show(ctx, |ui| {
+            ui.vertical_centered(|ui| {
+                ui.heading("Add file to cloud");
+            });
+            ui.add_space(4.0);
+
+            ui.horizontal(|ui| {
+                ui.label("name:");
                 let text_edit = egui::TextEdit::singleline(&mut self.add_file_name)
                     .hint_text("filename")
                     .desired_width(window_size.x);
                 let input = ui.add(text_edit);
+                if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                    self.showing_add_file_window = false;
+                    self.add_file_name = String::default();
+                }
 
-                input.request_focus();
-                ui.vertical_centered(|ui| {
-                    if ui.button("save").clicked() {
-                        if let Some((cloud, _)) = state.active_cloud() {
-                            cloud
-                                .db
-                                .insert::<String, Bytes>(
-                                    "files",
-                                    &self.add_file_name,
-                                    &std::mem::take(&mut self.add_file_bytes).into(),
-                                )
-                                .expect("failed to add file");
-                            self.load_files(state).ok();
-                            self.showing_add_file_window = false;
-                            self.add_file_name = String::default();
-                        } else {
-                            println!("WARNING: no active cloud!");
-                        }
-                    }
-                    if ui.button("cancel").clicked() {
+                if input.lost_focus() && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+                    if let Some((cloud, _)) = state.active_cloud() {
+                        cloud
+                            .db
+                            .insert::<String, Bytes>(
+                                "files",
+                                &self.add_file_name,
+                                &std::mem::take(&mut self.add_file_bytes).into(),
+                            )
+                            .expect("failed to add file");
+                        self.load_files(state).ok();
                         self.showing_add_file_window = false;
-                        std::mem::take(&mut self.add_file_bytes);
                         self.add_file_name = String::default();
+                    } else {
+                        println!("WARNING: no active cloud!");
                     }
-                });
+                }
+                input.request_focus();
+            });
+            ui.add_space(4.0);
+            ui.vertical_centered(|ui| {
+                if ui.button("cancel").clicked() {
+                    self.showing_add_file_window = false;
+                    std::mem::take(&mut self.add_file_bytes);
+                    self.add_file_name = String::default();
+                }
+            });
+        });
+    }
+
+    fn render_file_info(&mut self, ctx: &egui::Context, state: &AppState) {
+        let viewport_size = ctx.screen_rect();
+        egui::SidePanel::right("file_info")
+            .default_width((viewport_size.width() / 2.0).min(500.0))
+            .show(ctx, |ui| {
+                egui_taffy::tui(ui, "file_info_inner")
+                    .reserve_available_space()
+                    .style(Style {
+                        display: Display::Flex,
+                        flex_direction: FlexDirection::Column,
+                        min_size: Size {
+                            width: percent(1.0),
+                            height: percent(1.0),
+                        },
+                        max_size: Size {
+                            width: percent(1.0),
+                            height: percent(1.0),
+                        },
+                        overflow: Point {
+                            x: Overflow::default(),
+                            y: Overflow::Scroll,
+                        },
+                        ..Default::default()
+                    })
+                    .show(|tui| {
+                        tui.heading(&self.selected_filename);
+                        tui.separator();
+                        let file_extension = self
+                            .selected_filename
+                            .split(".")
+                            .last()
+                            .unwrap_or_default()
+                            .to_string();
+                        tui.label(format!("{} bytes", self.selected_file_bytes.len()));
+                        if tui
+                            .button(|tui| {
+                                tui.label("Download");
+                            })
+                            .clicked()
+                        {
+                            self.download_selected_file();
+                        }
+                        if file_extension == "jpg"
+                            || file_extension == "jpeg"
+                            || file_extension == "png"
+                            || file_extension == "gif"
+                            || file_extension == "webp"
+                        {
+                            let image = egui::Image::from_bytes(
+                                self.selected_filename.clone(),
+                                self.selected_file_bytes.clone(),
+                            );
+                            tui.style(Style {
+                                size: Size {
+                                    height: percent(1.0),
+                                    width: percent(1.0),
+                                },
+                                padding: length(4.0),
+                                ..Default::default()
+                            })
+                            .ui_add(image);
+                        } else if file_extension == "md" {
+                            tui.ui(|ui| {
+                                ui.style_mut().wrap_mode = Default::default();
+                                ui.set_max_width(ui.available_width());
+                                // TODO: actually cache this :(
+                                let string = String::from_utf8(self.selected_file_bytes.clone())
+                                    .unwrap_or_default();
+                                let mut md_cache = CommonMarkCache::default();
+                                CommonMarkViewer::new().show(ui, &mut md_cache, &string);
+                            });
+                        } else {
+                            tui.label("Cannot preview filetype");
+                        }
+                    });
             });
     }
 }
@@ -90,6 +219,7 @@ impl Applet for FilesApplet {
             match event {
                 AppEvent::ActiveCloudChanged => {
                     self.load_files(state)?;
+                    self.selected_filename = String::default();
                 }
                 AppEvent::RemoteCloudUpdate(cloud_id) => {
                     if cloud_id == &state.active_cloud_id.unwrap_or_default() {
@@ -98,6 +228,7 @@ impl Applet for FilesApplet {
                 }
                 AppEvent::ActiveAppletChanged => {
                     // self.load_files(state)?;
+                    self.selected_filename = String::default();
                 }
             }
         }
@@ -146,6 +277,10 @@ impl Applet for FilesApplet {
             self.render_add_file_window(ctx, state);
         }
 
+        if !self.selected_filename.trim().is_empty() {
+            self.render_file_info(ctx, state);
+        }
+
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.vertical_centered(|ui| {
                 ui.heading("Files");
@@ -170,8 +305,27 @@ impl Applet for FilesApplet {
                     ..Default::default()
                 })
                 .show(|tui| {
+                    let mut selected_file_changed = false;
                     for name in &self.filenames {
-                        tui.heading(name);
+                        if tui
+                            .style(Style {
+                                flex_direction: FlexDirection::Row,
+                                justify_content: Some(JustifyContent::SpaceBetween),
+                                padding: length(4.0),
+                                margin: length(2.0),
+                                ..Default::default()
+                            })
+                            .selectable(&self.selected_filename == name, |tui| {
+                                tui.heading(name);
+                            })
+                            .clicked()
+                        {
+                            self.selected_filename = name.clone();
+                            selected_file_changed = true;
+                        }
+                    }
+                    if selected_file_changed {
+                        self.load_selected_file(state);
                     }
                 });
         });
