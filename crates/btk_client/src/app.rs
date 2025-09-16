@@ -332,8 +332,8 @@ impl App {
                     Err(_) => {}
                 }
             }
-
             input.request_focus();
+
             ui.add_space(4.0);
             ui.vertical_centered(|ui| {
                 if ui.button("cancel").clicked() {
