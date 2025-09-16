@@ -268,7 +268,7 @@ impl App {
 
     fn render_import_view(&mut self, ctx: &egui::Context) {
         let window_size = Vec2::new(300.0, 300.0);
-        egui::Modal::new("import cloud".into()).show(ctx, |ui| {
+        let response = egui::Modal::new("import cloud".into()).show(ctx, |ui| {
             ui.heading("Import an encrypted cloud");
             ui.add_space(4.0);
             let text_edit = egui::TextEdit::singleline(&mut self.import_key)
@@ -308,6 +308,10 @@ impl App {
                 }
             });
         });
+        if response.should_close() {
+            self.showing_import = false;
+            self.import_key = String::default();
+        }
     }
 
     fn render_footer(&mut self, ctx: &egui::Context) {
@@ -432,7 +436,6 @@ impl eframe::App for App {
                 }
                 ActionRequest::LoadClouds => {
                     self.state.load_clouds().expect("failed to load clouds");
-                    ctx.request_repaint();
                 }
                 ActionRequest::SwitchCloud(cloud_id) => {
                     self.state
@@ -443,7 +446,6 @@ impl eframe::App for App {
                         .0
                         .send(AppEvent::ActiveCloudChanged(self.active_applet.clone()))
                         .expect("failed to send ActiveCloudChanged app event");
-                    ctx.request_repaint();
                 }
             }
         }

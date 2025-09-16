@@ -91,7 +91,7 @@ impl FilesApplet {
 
     fn render_add_file_window(&mut self, ctx: &egui::Context, state: &AppState) {
         let window_size = egui::Vec2::new(300.0, 300.0);
-        egui::Modal::new("add file".into()).show(ctx, |ui| {
+        let response = egui::Modal::new("add file".into()).show(ctx, |ui| {
             ui.vertical_centered(|ui| {
                 ui.heading("Add file to cloud");
             });
@@ -136,6 +136,10 @@ impl FilesApplet {
                 }
             });
         });
+        if response.should_close() {
+            self.showing_add_file_window = false;
+            self.add_file_name = String::default();
+        }
     }
 
     fn render_file_info(&mut self, ctx: &egui::Context, _state: &AppState) {
