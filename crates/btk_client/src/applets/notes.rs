@@ -373,7 +373,10 @@ impl Applet for NotesApplet {
                     }
                 }
                 if self.active_note != self.active_note_unsaved {
-                    if ui.button("Save").clicked() {
+                    let save_pressed =
+                        ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
+                    let button = egui::Button::new("Save").shortcut_text("Cmd+S");
+                    if ui.add(button).clicked() || save_pressed {
                         self.save(state).expect("failed to save");
                     }
                     // we have unsaved changes
