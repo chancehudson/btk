@@ -14,6 +14,7 @@ use egui_taffy::taffy::prelude::*;
 use super::Applet;
 use crate::app::AppEvent;
 use crate::data::AppState;
+use crate::widgets::ConfirmButton;
 
 #[derive(Default, PartialEq)]
 enum LastScrolled {
@@ -134,6 +135,34 @@ impl NotesApplet {
         }
 
         Ok(active_note)
+    }
+
+    fn delete(&mut self, note_name: &str, state: &AppState) -> Result<()> {
+        let (active_cloud, _metadata) = match state.active_cloud() {
+            Some(c) => c,
+            None => {
+                println!("WARNING: cannot delete note: no active cloud");
+                return Ok(());
+            }
+        };
+
+        let mut tx = active_cloud.db.begin_write()?;
+        // Delete history of changes
+        tx.delete_table(&Self::table_name(note_name))?;
+
+        // Delete note from names table
+        let mut note_names_table = tx.open_table(NOTES_TABLE_NAME)?;
+        note_names_table.remove(&note_name)?;
+        drop(note_names_table);
+
+        tx.commit()?;
+
+        self.active_note = String::default();
+        self.active_note_unsaved = String::default();
+        self.active_note_name = String::default();
+
+        self.reload_note_names(state)?;
+        Ok(())
     }
 
     fn open(&mut self, note_name: &str, state: &AppState) -> Result<()> {
@@ -354,6 +383,16 @@ impl Applet for NotesApplet {
                 // {
                 //     self.is_showing_history = !self.is_showing_history;
                 // }
+                if self.active_note != self.active_note_unsaved {
+                    let save_pressed =
+                        ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
+                    let button = egui::Button::new("Save").shortcut_text("Cmd+S");
+                    if ui.add(button).clicked() || save_pressed {
+                        self.save(state).expect("failed to save");
+                    }
+                    // we have unsaved changes
+                    ui.colored_label(Color32::RED, "unsaved changes!");
+                }
                 if !self.active_note.trim().is_empty() && !self.active_note_name.trim().is_empty() {
                     if ui
                         .button("Export")
@@ -372,15 +411,16 @@ impl Applet for NotesApplet {
                         }
                     }
                 }
-                if self.active_note != self.active_note_unsaved {
-                    let save_pressed =
-                        ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
-                    let button = egui::Button::new("Save").shortcut_text("Cmd+S");
-                    if ui.add(button).clicked() || save_pressed {
-                        self.save(state).expect("failed to save");
+                if !self.active_note_name.trim().is_empty() {
+                    let button = ConfirmButton::init("note_delete_confirm".into(), ui, &|b| {
+                        b.text = "Delete".to_string();
+                        b.confirm_text = "Are you sure?".to_string();
+                    });
+                    if button.confirmed() {
+                        // delete note
+                        self.delete(&self.active_note_name.clone(), state).ok();
                     }
-                    // we have unsaved changes
-                    ui.colored_label(Color32::RED, "unsaved changes!");
+                    ui.add(button);
                 }
             });
             ui.allocate_ui(ui.available_size(), |ui| {

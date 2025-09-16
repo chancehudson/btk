@@ -179,6 +179,7 @@ impl FilesApplet {
                         {
                             self.download_selected_file().ok();
                         }
+                        tui.separator();
                         if file_extension == "jpg"
                             || file_extension == "jpeg"
                             || file_extension == "png"

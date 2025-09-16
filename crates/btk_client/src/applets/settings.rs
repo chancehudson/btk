@@ -104,10 +104,15 @@ impl Applet for SettingsApplet {
                 description_label.update_value_if_needed(&metadata.description);
                 ui.add(description_label);
             });
+            ui.separator();
             ui.horizontal(|ui| {
                 ui.label("key:");
                 ui.label(hex::encode(active_cloud.private_key()));
             });
+            ui.colored_label(
+                Color32::RED,
+                "WARNING: sharing this key irreversibly shares access to this cloud!",
+            );
 
             ui.separator();
             ui.label("Remote connection");
