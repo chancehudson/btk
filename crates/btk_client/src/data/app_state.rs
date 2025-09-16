@@ -312,7 +312,7 @@ impl AppState {
     // Functions below here are for persisting to local storage in browser
 
     #[cfg(target_arch = "wasm32")]
-    fn load_keys_localstorage(&self) -> Result<()> {
+    fn load_keys_localstorage(&mut self) -> Result<()> {
         use gloo_storage::Storage;
 
         let keys_str = gloo_storage::LocalStorage::get::<String>("btk_keys")
@@ -320,6 +320,15 @@ impl AppState {
             .unwrap_or_default();
         for key_str in keys_str.split(",") {
             self.import_cloud(key_str).ok();
+        }
+
+        if let Some(active_cloud_id) =
+            gloo_storage::LocalStorage::get::<String>("btk_active_cloud_id").ok()
+            && active_cloud_id.len() == 64
+        {
+            let mut id = <[u8; 32]>::default();
+            id.copy_from_slice(hex::decode(active_cloud_id)?.as_slice());
+            self.set_active_cloud(Some(id))?;
         }
         Ok(())
     }
@@ -334,6 +343,10 @@ impl AppState {
             .map(|key| hex::encode(key))
             .collect::<Vec<_>>()
             .join(",");
+        if let Some(active_cloud_id) = self.active_cloud_id {
+            gloo_storage::LocalStorage::set("btk_active_cloud_id", hex::encode(active_cloud_id))
+                .ok();
+        }
 
         gloo_storage::LocalStorage::set("btk_keys", keys_str).ok();
         Ok(())

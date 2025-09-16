@@ -229,6 +229,7 @@ impl FilesApplet {
                             || file_extension == "png"
                             || file_extension == "gif"
                             || file_extension == "webp";
+                        #[cfg(not(target_arch = "wasm32"))]
                         if is_image {
                             if tui
                                 .style(Style {
