@@ -294,8 +294,11 @@ impl AppState {
 
     #[cfg(not(target_arch = "wasm32"))]
     fn local_data_dir() -> Result<Option<PathBuf>> {
-        if let Some(project_dirs) = directories::ProjectDirs::from("org", "btkcloud", "btk_client")
-        {
+        #[cfg(debug_assertions)]
+        let name = "btk_client_dev";
+        #[cfg(not(debug_assertions))]
+        let name = "btk_client";
+        if let Some(project_dirs) = directories::ProjectDirs::from("org", "btkcloud", name) {
             let data_dir = project_dirs.data_local_dir();
             std::fs::create_dir_all(data_dir)?;
             Ok(Some(data_dir.into()))
