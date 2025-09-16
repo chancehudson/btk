@@ -30,7 +30,7 @@ const ACTIVE_CLOUD_KEY: [u8; 32] = [0; 32];
 ///
 /// A state object that is accessible in all applets.
 pub struct AppState {
-    ctx: egui::Context,
+    pub ctx: egui::Context,
     pub pending_events: (flume::Sender<AppEvent>, flume::Receiver<AppEvent>),
     pub pending_requests: (flume::Sender<ActionRequest>, flume::Receiver<ActionRequest>),
     pub sync_status: (

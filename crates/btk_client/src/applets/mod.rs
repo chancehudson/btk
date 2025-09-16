@@ -1,6 +1,7 @@
 use anyhow::Result;
 
 mod files;
+mod history;
 mod home;
 mod mail;
 mod notes;
@@ -8,6 +9,7 @@ mod settings;
 mod tasks;
 
 pub use files::FilesApplet;
+pub use history::HistoryApplet;
 pub use mail::MailApplet;
 pub use notes::NotesApplet;
 pub use settings::SettingsApplet;

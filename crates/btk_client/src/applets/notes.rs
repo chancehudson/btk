@@ -287,12 +287,25 @@ impl Applet for NotesApplet {
     fn handle_app_events(&mut self, events: &Vec<AppEvent>, state: &AppState) -> Result<()> {
         for event in events {
             match event {
-                AppEvent::ActiveAppletChanged => {
-                    self.reload_note_names(state)?;
+                AppEvent::ActiveAppletChanged(applet_name) => {
+                    if applet_name == self.name() {
+                        self.reload_note_names(state)?;
+                        if self.active_note_name.is_empty() {
+                            state
+                                .ctx
+                                .memory_mut(|mem| mem.request_focus(INPUT_NOTE_NAME.into()));
+                        } else {
+                            state
+                                .ctx
+                                .memory_mut(|mem| mem.request_focus(INPUT_NOTE_SOURCE.into()));
+                        }
+                    }
                 }
-                AppEvent::ActiveCloudChanged => {
-                    self.reload_note_names(state)?;
-                    self.reset_note_state();
+                AppEvent::ActiveCloudChanged(applet_name) => {
+                    if applet_name == self.name() {
+                        self.reload_note_names(state)?;
+                        self.reset_note_state();
+                    }
                 }
                 AppEvent::RemoteCloudUpdate(cloud_id) => {
                     if cloud_id == &state.active_cloud_id.unwrap_or_default() {
@@ -322,19 +335,6 @@ impl Applet for NotesApplet {
         //         100. * self.last_rendered_percent
         //     ));
         // });
-
-        for event in state.drain_pending_app_events() {
-            match event {
-                AppEvent::ActiveAppletChanged => {
-                    if self.active_note_name.is_empty() {
-                        ctx.memory_mut(|mem| mem.request_focus(INPUT_NOTE_NAME.into()));
-                    } else {
-                        ctx.memory_mut(|mem| mem.request_focus(INPUT_NOTE_SOURCE.into()));
-                    }
-                }
-                _ => {}
-            }
-        }
 
         self.render_side_list(ctx, state);
 

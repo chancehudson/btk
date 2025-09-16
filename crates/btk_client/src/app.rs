@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use egui::Pos2;
 use egui::Rect;
 use egui::Vec2;
 use egui_taffy::TuiBuilderLogic;
@@ -17,8 +16,8 @@ use crate::data::AppState;
 use crate::data::CloudMetadata;
 
 pub enum AppEvent {
-    ActiveAppletChanged,
-    ActiveCloudChanged,
+    ActiveAppletChanged(String),
+    ActiveCloudChanged(String),
     /// An update was received from the remote. The ui should be resynced
     RemoteCloudUpdate([u8; 32]),
 }
@@ -87,6 +86,7 @@ impl App {
             Box::new(TasksApplet::default()) as Box<dyn Applet>,
             Box::new(MailApplet::default()) as Box<dyn Applet>,
             Box::new(SettingsApplet::default()) as Box<dyn Applet>,
+            Box::new(HistoryApplet::default()) as Box<dyn Applet>,
         ] {
             applet.as_mut().init(&state)?;
             applets.insert(applet.name().into(), applet);
@@ -126,11 +126,11 @@ impl App {
 
 impl App {
     fn change_applet(&mut self, next_applet: String) {
-        self.active_applet = next_applet;
+        self.active_applet = next_applet.clone();
         self.state
             .pending_events
             .0
-            .send(AppEvent::ActiveAppletChanged)
+            .send(AppEvent::ActiveAppletChanged(next_applet))
             .expect("failed to send app event");
     }
 
@@ -358,28 +358,6 @@ impl eframe::App for App {
             self.sync_status.insert(cloud_id, status);
         }
 
-        let pending_events = self.state.pending_events.1.drain().collect();
-        for applet in self.applets.values_mut() {
-            applet
-                .handle_app_events(&pending_events, &self.state)
-                .expect(&format!("applet {} failed to handle events", applet.name()));
-        }
-        for event in &pending_events {
-            if matches!(event, AppEvent::RemoteCloudUpdate(_)) {
-                self.state.reload_clouds();
-                break;
-            }
-        }
-        // we resend here so the `update` function in the active applet can access these. The
-        // channel will be cleared at the end of this function regardless.
-        for event in pending_events {
-            self.state
-                .pending_events
-                .0
-                .send(event)
-                .expect("failed to resend event");
-        }
-
         self.handle_keyboard_input(ctx);
         self.show_framerate_window(ctx);
         self.render_footer(ctx);
@@ -439,7 +417,6 @@ impl eframe::App for App {
                 });
         }
         self.last_render_time = Instant::now().duration_since(render_start);
-        self.state.pending_events.1.drain();
         for r in self.state.drain_pending_app_requests() {
             match r {
                 ActionRequest::UpdateCloudMetadata(cloud_id, new_metadata) => {
@@ -464,8 +441,24 @@ impl eframe::App for App {
                     self.state
                         .pending_events
                         .0
-                        .send(AppEvent::ActiveCloudChanged)
+                        .send(AppEvent::ActiveCloudChanged(self.active_applet.clone()))
                         .expect("failed to send ActiveCloudChanged app event");
+                }
+            }
+        }
+
+        let pending_events: Vec<_> = self.state.pending_events.1.drain().collect();
+        if !pending_events.is_empty() {
+            println!("{}", pending_events.len());
+            for applet in self.applets.values_mut() {
+                applet
+                    .handle_app_events(&pending_events, &self.state)
+                    .expect(&format!("applet {} failed to handle events", applet.name()));
+            }
+            for event in &pending_events {
+                if matches!(event, AppEvent::RemoteCloudUpdate(_)) {
+                    self.state.reload_clouds();
+                    break;
                 }
             }
         }

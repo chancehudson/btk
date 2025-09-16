@@ -229,18 +229,22 @@ impl Applet for FilesApplet {
     ) -> Result<()> {
         for event in events {
             match event {
-                AppEvent::ActiveCloudChanged => {
-                    self.load_files(state)?;
-                    self.selected_filename = String::default();
+                AppEvent::ActiveCloudChanged(applet_name) => {
+                    if applet_name == self.name() {
+                        self.load_files(state)?;
+                        self.selected_filename = String::default();
+                    }
                 }
                 AppEvent::RemoteCloudUpdate(cloud_id) => {
                     if cloud_id == &state.active_cloud_id.unwrap_or_default() {
                         self.load_files(state)?;
                     }
                 }
-                AppEvent::ActiveAppletChanged => {
-                    self.load_files(state)?;
-                    self.selected_filename = String::default();
+                AppEvent::ActiveAppletChanged(applet_name) => {
+                    if applet_name == self.name() {
+                        self.load_files(state)?;
+                        self.selected_filename = String::default();
+                    }
                 }
             }
         }

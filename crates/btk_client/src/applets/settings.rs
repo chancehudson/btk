@@ -20,10 +20,10 @@ impl Applet for SettingsApplet {
     fn handle_app_events(&mut self, events: &Vec<AppEvent>, _state: &AppState) -> Result<()> {
         for event in events {
             match event {
-                AppEvent::ActiveAppletChanged => {
+                AppEvent::ActiveAppletChanged(_applet_name) => {
                     self.new_remote_url = String::default();
                 }
-                AppEvent::ActiveCloudChanged => {
+                AppEvent::ActiveCloudChanged(_applet_name) => {
                     self.new_remote_url = String::default();
                 }
                 AppEvent::RemoteCloudUpdate(_cloud_id) => {
