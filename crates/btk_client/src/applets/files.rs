@@ -238,7 +238,7 @@ impl Applet for FilesApplet {
                     }
                 }
                 AppEvent::ActiveAppletChanged => {
-                    // self.load_files(state)?;
+                    self.load_files(state)?;
                     self.selected_filename = String::default();
                 }
             }

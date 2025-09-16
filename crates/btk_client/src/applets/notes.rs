@@ -1,3 +1,4 @@
+use anondb::Bytes;
 use anondb::Journal;
 use anyhow::Result;
 use egui::Color32;
@@ -353,6 +354,24 @@ impl Applet for NotesApplet {
                 // {
                 //     self.is_showing_history = !self.is_showing_history;
                 // }
+                if !self.active_note.trim().is_empty() && !self.active_note_name.trim().is_empty() {
+                    if ui
+                        .button("Export")
+                        .on_hover_text("Export as file in cloud")
+                        .clicked()
+                    {
+                        if let Some((cloud, _)) = state.active_cloud() {
+                            cloud
+                                .db
+                                .insert::<String, Bytes>(
+                                    "files",
+                                    &self.active_note_name,
+                                    &self.active_note.as_bytes().into(),
+                                )
+                                .ok();
+                        }
+                    }
+                }
                 if self.active_note != self.active_note_unsaved {
                     if ui.button("Save").clicked() {
                         self.save(state).expect("failed to save");
