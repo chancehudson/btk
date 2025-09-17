@@ -80,11 +80,11 @@ impl Applet for HistoryApplet {
                         }
                     }
                 }
-                AppEvent::ActiveCloudChanged(applet_name) => {
-                    if applet_name == self.name() {
-                        if let Some((active_cloud, _metadata)) = state.active_cloud() {
-                            self.history = active_cloud.db.journal_transactions()?;
-                        }
+                AppEvent::ActiveCloudChanged => {
+                    if let Some((active_cloud, _metadata)) = state.active_cloud() {
+                        self.history = active_cloud.db.journal_transactions()?;
+                    } else {
+                        self.history = Vec::default();
                     }
                 }
                 _ => {}

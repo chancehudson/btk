@@ -301,11 +301,9 @@ impl Applet for NotesApplet {
                         }
                     }
                 }
-                AppEvent::ActiveCloudChanged(applet_name) => {
-                    if applet_name == self.name() {
-                        self.reload_note_names(state)?;
-                        self.reset_note_state();
-                    }
+                AppEvent::ActiveCloudChanged => {
+                    self.reload_note_names(state)?;
+                    self.reset_note_state();
                 }
                 AppEvent::RemoteCloudUpdate(cloud_id) => {
                     if cloud_id == &state.active_cloud_id.unwrap_or_default() {

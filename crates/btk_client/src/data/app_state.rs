@@ -176,7 +176,7 @@ impl AppState {
 
         if let Some(active_cloud_id) = self.active_cloud_id {
             if !self.clouds.read().unwrap().contains_key(&active_cloud_id) {
-                self.switch_cloud(None);
+                self.set_active_cloud(None)?;
             }
         }
 
@@ -296,6 +296,7 @@ impl AppState {
                 .remove::<_, [u8; 32]>(CLOUD_KEYS_TABLE, &ACTIVE_CLOUD_KEY)?;
             self.active_cloud_id = None;
         }
+        self.pending_events.0.send(AppEvent::ActiveCloudChanged)?;
         #[cfg(target_arch = "wasm32")]
         self.persist_keys_localstorage()?;
         Ok(())

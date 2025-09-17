@@ -4,7 +4,6 @@ use std::sync::Arc;
 use anyhow::Result;
 use egui::Rect;
 use egui::Vec2;
-use egui::load::BytesLoader;
 use egui_taffy::TuiBuilderLogic;
 use egui_taffy::taffy::Overflow;
 use egui_taffy::taffy::Point;
@@ -21,7 +20,7 @@ use crate::theme::setup_themes;
 
 pub enum AppEvent {
     ActiveAppletChanged(String),
-    ActiveCloudChanged(String),
+    ActiveCloudChanged,
     /// An update was received from the remote. The ui should be resynced
     RemoteCloudUpdate([u8; 32]),
 }
@@ -78,18 +77,21 @@ fn clear_href_query(url: String) -> Result<()> {
 
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Result<Self> {
-        // setup egui/taffy rendering stuff
+        // loaders
         egui_extras::install_image_loaders(&cc.egui_ctx);
+
         let cloud_file_loader = Arc::new(CloudFileLoader::default());
         cc.egui_ctx.add_bytes_loader(cloud_file_loader.clone());
 
+        setup_themes(&cc.egui_ctx);
+
+        // setup egui/taffy rendering stuff
         cc.egui_ctx.options_mut(|options| {
             options.max_passes = std::num::NonZeroUsize::new(2).unwrap();
         });
         cc.egui_ctx.style_mut(|style| {
             style.wrap_mode = Some(egui::TextWrapMode::Extend);
         });
-        setup_themes(&cc.egui_ctx);
 
         // construct application state
         let mut state = AppState::new(cc.egui_ctx.clone())?;
@@ -165,15 +167,13 @@ impl App {
         }
         Ok(out)
     }
-}
 
-impl App {
     fn change_applet(&mut self, next_applet: String) {
         self.active_applet = next_applet.clone();
         self.state
             .pending_events
             .0
-            .send(AppEvent::ActiveAppletChanged(next_applet))
+            .send(AppEvent::ActiveAppletChanged(self.active_applet.clone()))
             .expect("failed to send app event");
     }
 
@@ -400,6 +400,12 @@ impl eframe::App for App {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        ctx.options_mut(|options| {
+            options.max_passes = std::num::NonZeroUsize::new(2).unwrap();
+        });
+        ctx.style_mut(|style| {
+            style.wrap_mode = Some(egui::TextWrapMode::Extend);
+        });
         let render_start = Instant::now();
 
         for (cloud_id, status) in self.state.sync_status.1.drain() {
@@ -471,7 +477,7 @@ impl eframe::App for App {
                     // TODO: de duplicate this
                     self.state.reload_clouds();
                 }
-                if matches!(event, AppEvent::ActiveCloudChanged(_)) {
+                if matches!(event, AppEvent::ActiveCloudChanged) {
                     self.cloud_file_loader.set_active_cloud(
                         self.state.active_cloud().and_then(|(cloud, _)| Some(cloud)),
                     );
@@ -512,11 +518,6 @@ impl eframe::App for App {
                     self.state
                         .set_active_cloud(cloud_id)
                         .expect("failed to set active cloud");
-                    self.state
-                        .pending_events
-                        .0
-                        .send(AppEvent::ActiveCloudChanged(self.active_applet.clone()))
-                        .expect("failed to send ActiveCloudChanged app event");
                 }
             }
         }

@@ -24,7 +24,7 @@ impl Applet for SettingsApplet {
                 AppEvent::ActiveAppletChanged(_applet_name) => {
                     self.new_remote_url = String::default();
                 }
-                AppEvent::ActiveCloudChanged(_applet_name) => {
+                AppEvent::ActiveCloudChanged => {
                     self.new_remote_url = String::default();
                 }
                 AppEvent::RemoteCloudUpdate(_cloud_id) => {
