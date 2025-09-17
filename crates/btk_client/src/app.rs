@@ -1,8 +1,10 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use anyhow::Result;
 use egui::Rect;
 use egui::Vec2;
+use egui::load::BytesLoader;
 use egui_taffy::TuiBuilderLogic;
 use egui_taffy::taffy::Overflow;
 use egui_taffy::taffy::Point;
@@ -13,6 +15,7 @@ use web_time::Instant;
 
 use crate::applets::*;
 use crate::data::AppState;
+use crate::data::CloudFileLoader;
 use crate::data::CloudMetadata;
 use crate::theme::setup_themes;
 
@@ -40,6 +43,7 @@ pub struct App {
     showing_import: bool,
     import_key: String,
     sync_status: HashMap<[u8; 32], String>,
+    cloud_file_loader: Arc<CloudFileLoader>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -76,6 +80,8 @@ impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Result<Self> {
         // setup egui/taffy rendering stuff
         egui_extras::install_image_loaders(&cc.egui_ctx);
+        let cloud_file_loader = Arc::new(CloudFileLoader::default());
+        cc.egui_ctx.add_bytes_loader(cloud_file_loader.clone());
 
         cc.egui_ctx.options_mut(|options| {
             options.max_passes = std::num::NonZeroUsize::new(2).unwrap();
@@ -123,6 +129,7 @@ impl App {
             showing_import: false,
             import_key: String::default(),
             sync_status: HashMap::default(),
+            cloud_file_loader,
         };
 
         // on the web allow customizing the initial view
@@ -461,8 +468,13 @@ impl eframe::App for App {
             }
             for event in &pending_events {
                 if matches!(event, AppEvent::RemoteCloudUpdate(_)) {
+                    // TODO: de duplicate this
                     self.state.reload_clouds();
-                    break;
+                }
+                if matches!(event, AppEvent::ActiveCloudChanged(_)) {
+                    self.cloud_file_loader.set_active_cloud(
+                        self.state.active_cloud().and_then(|(cloud, _)| Some(cloud)),
+                    );
                 }
             }
         }
