@@ -371,7 +371,6 @@ impl Applet for FilesApplet {
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Files");
             egui_taffy::tui(ui, "home")
                 .reserve_available_space()
                 .style(Style {
@@ -392,6 +391,18 @@ impl Applet for FilesApplet {
                     ..Default::default()
                 })
                 .show(|tui| {
+                    tui.style(Style {
+                        flex_direction: FlexDirection::Row,
+                        justify_content: Some(JustifyContent::SpaceBetween),
+
+                        ..Default::default()
+                    })
+                    .add(|tui| {
+                        tui.heading("Files");
+                        tui.heading("?")
+                            .on_hover_text("Drop files anywhere to add")
+                            .on_hover_cursor(egui::CursorIcon::Help);
+                    });
                     let mut selected_file_changed = false;
                     for name in &self.filenames {
                         if tui
