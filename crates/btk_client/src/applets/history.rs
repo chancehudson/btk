@@ -63,6 +63,15 @@ impl HistoryApplet {
             self.showing_create_duplicate_modal = false;
         }
     }
+
+    fn reload_history(&mut self, state: &AppState) -> Result<()> {
+        if let Some((active_cloud, _metadata)) = state.active_cloud() {
+            self.history = active_cloud.db.journal_transactions()?;
+        } else {
+            self.history = Vec::default();
+        }
+        Ok(())
+    }
 }
 
 impl Applet for HistoryApplet {
@@ -75,19 +84,15 @@ impl Applet for HistoryApplet {
             match event {
                 AppEvent::ActiveAppletChanged(applet_name) => {
                     if applet_name == self.name() {
-                        if let Some((active_cloud, _metadata)) = state.active_cloud() {
-                            self.history = active_cloud.db.journal_transactions()?;
-                        }
+                        self.reload_history(state)?;
                     }
                 }
                 AppEvent::ActiveCloudChanged => {
-                    if let Some((active_cloud, _metadata)) = state.active_cloud() {
-                        self.history = active_cloud.db.journal_transactions()?;
-                    } else {
-                        self.history = Vec::default();
-                    }
+                    self.reload_history(state)?;
                 }
-                _ => {}
+                AppEvent::RemoteCloudUpdate(_) => {
+                    self.reload_history(state)?;
+                }
             }
         }
         Ok(())
