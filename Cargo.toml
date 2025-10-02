@@ -16,6 +16,6 @@ flume = "0"
 ml-dsa = { version = "0", default-features = false }
 chacha20 = "0"
 
-#anondb = { version = "0", git = "https://github.com/chancehudson/anondb.git" }
-anondb = { version = "0", path = "../anondb" }
+anondb = { version = "0", git = "https://github.com/chancehudson/anondb.git" }
+#anondb = { version = "0", path = "../anondb" }
 

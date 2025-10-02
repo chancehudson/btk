@@ -11,3 +11,10 @@ Each encrypted change to the cloud is called a "mutation". Each change is encryp
 Each mutation includes a signature of the encrypted data.
 
 Each mutation contains a journal entry, which forms a hashchain for a given cloud.
+
+## To run
+
+Clone the repo and run the following:
+
+`cargo run --bin=btk_client --release`
+

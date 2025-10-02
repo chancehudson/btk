@@ -193,6 +193,7 @@ dependencies = [
 [[package]]
 name = "anondb"
 version = "0.1.0"
+source = "git+https://github.com/chancehudson/anondb.git#889b6dac9dbe29925e39001ab75a65f219846cfa"
 dependencies = [
  "anyhow",
  "bincode",
